@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>聪明格 · 游戏试玩</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&display=swap');
+
+  :root{
+    --green-dark:  #052e16;
+    --green-mid:   #166534;
+    --green:       #16a34a;
+    --green-light: #4ade80;
+    --green-pale:  #bbf7d0;
+    --yellow:      #fde047;
+    --orange:      #fb923c;
+    --pink:        #f472b6;
+    --blue:        #60a5fa;
+    --purple:      #a78bfa;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; }
+
+  html,body{
+    min-height:100%;
+    background: var(--green-dark);
+    font-family: 'Nunito', system-ui, sans-serif;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* ── 背景装饰 ── */
+  body::before{
+    content:'';
+    position:fixed; inset:0; z-index:0;
+    background:
+      radial-gradient(ellipse 60% 40% at 15% 20%, rgba(74,222,128,.12) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 35% at 85% 75%, rgba(96,165,250,.10) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 50% 50%, rgba(167,139,250,.07) 0%, transparent 70%);
+    pointer-events:none;
+  }
+
+  /* ── 顶部 Header ── */
+  header{
+    position:relative; z-index:1;
+    text-align:center;
+    padding: 48px 20px 20px;
+  }
+  .logo-badge{
+    display:inline-flex; align-items:center; gap:8px;
+    background: rgba(22,163,74,.2);
+    border: 1.5px solid rgba(74,222,128,.35);
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 13px;
+    color: var(--green-light);
+    font-weight: 600;
+    letter-spacing:.05em;
+    margin-bottom: 16px;
+  }
+  .logo-badge span{ font-size:16px; }
+  h1{
+    font-size: clamp(28px, 6vw, 48px);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -.02em;
+    background: linear-gradient(135deg, #fff 30%, var(--green-light) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 10px;
+  }
+  .subtitle{
+    font-size: clamp(13px, 2.5vw, 16px);
+    color: rgba(187,247,208,.65);
+    font-weight: 400;
+    max-width: 340px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ── 游戏网格 ── */
+  main{
+    position: relative; z-index:1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 16px 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  /* ── 游戏卡片 ── */
+  .card{
+    position: relative;
+    background: rgba(255,255,255,.05);
+    border: 1.5px solid rgba(255,255,255,.1);
+    border-radius: 20px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card:hover{
+    transform: translateY(-4px);
+    border-color: rgba(74,222,128,.5);
+    box-shadow: 0 16px 40px rgba(0,0,0,.35);
+  }
+  .card:active{ transform: scale(.97); }
+
+  /* 卡片顶部色块 */
+  .card-cover{
+    height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 56px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-cover::after{
+    content:'';
+    position:absolute; inset:0;
+    background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,.25));
+  }
+
+  /* 标签 */
+  .card-tag{
+    position:absolute; top:10px; right:10px;
+    font-size:11px; font-weight:700;
+    padding:3px 9px; border-radius:100px;
+    background:rgba(0,0,0,.3);
+    color:#fff;
+    letter-spacing:.04em;
+    z-index:1;
+  }
+  .tag-new{ background:var(--yellow); color:#422006; }
+  .tag-hot{ background:var(--orange); color:#431407; }
+  .tag-soon{ background:rgba(255,255,255,.2); color:rgba(255,255,255,.7); }
+
+  .card-body{
+    padding: 16px 18px 20px;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .card-title{
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  .card-desc{
+    font-size: 13px;
+    color: rgba(255,255,255,.55);
+    line-height: 1.5;
+    flex:1;
+  }
+  .card-meta{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:10px;
+  }
+  .card-grade{
+    font-size:12px; font-weight:600;
+    color: var(--green-light);
+    background: rgba(74,222,128,.12);
+    padding:3px 10px; border-radius:100px;
+  }
+  .card-btn{
+    font-size:13px; font-weight:700;
+    color:#fff;
+    background: var(--green);
+    padding:6px 16px; border-radius:100px;
+    transition: background .15s;
+  }
+  .card:hover .card-btn{ background:#15803d; }
+
+  /* 即将上线的卡片灰显 */
+  .card.coming-soon{
+    opacity:.55;
+    pointer-events:none;
+    filter:grayscale(.5);
+  }
+
+  /* ── 底部 ── */
+  footer{
+    position:relative; z-index:1;
+    text-align:center;
+    padding:0 20px 40px;
+    font-size:12px;
+    color:rgba(255,255,255,.25);
+  }
+
+  /* ── 移动端微调 ── */
+  @media(max-width:480px){
+    main{ grid-template-columns:1fr 1fr; gap:12px; padding:20px 12px 50px; }
+    .card-cover{ height:100px; font-size:44px; }
+    .card-body{ padding:12px 14px 16px; }
+    .card-title{ font-size:15px; }
+    .card-desc{ display:none; }
+    .card-meta{ margin-top:6px; }
+    .card-grade{ font-size:11px; }
+    .card-btn{ font-size:12px; padding:5px 12px; }
+    header{ padding:32px 16px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-badge"><span>🌱</span> 聪明格出品</div>
+  <h1>益智游戏<br>试玩中心</h1>
+  <p class="subtitle">边玩边学，数学、语文、逻辑全覆盖</p>
+</header>
+
+<main id="game-grid"></main>
+
+<footer>内部测试版 · 聪明格团队</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  ★ 在这里管理所有游戏 ★
+//  新增游戏：在数组末尾添加一个对象
+//  字段说明：
+//    file   - HTML 文件名（与本文件放在同一文件夹）
+//    title  - 游戏名称
+//    desc   - 一句话描述
+//    emoji  - 卡片封面图标
+//    bg     - 卡片封面背景色（CSS 渐变或纯色）
+//    grade  - 适合年级
+//    tag    - 标签：'new'=新上线 / 'hot'=热门 / 'soon'=即将上线 / ''=无标签
+// ═══════════════════════════════════════════════════════
+const GAMES = [
+  {
+    file:  'math-run.html',
+    title: '数学跑酷',
+    desc:  '答对口算题，角色自动飞越障碍，越跑越快！',
+    emoji: '🏃',
+    bg:    'linear-gradient(135deg, #052e16 0%, #166534 100%)',
+    grade: '1–4 年级',
+    tag:   'hot',
+  },
+  {
+    file:  'smart-grid.html',
+    title: '聪明格',
+    desc:  'KenKen 数独变体，锻炼运算与逻辑推理。',
+    emoji: '🔢',
+    bg:    'linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%)',
+    grade: '3–6 年级',
+    tag:   'new',
+  },
+  // ── 在下方添加新游戏 ──
+  // {
+  //   file:  'idiom-chain.html',
+  //   title: '成语接龙',
+  //   desc:  '快速接龙，比拼词汇量。',
+  //   emoji: '📖',
+  //   bg:    'linear-gradient(135deg, #431407 0%, #ea580c 100%)',
+  //   grade: '3–6 年级',
+  //   tag:   'soon',
+  // },
+];
+// ═══════════════════════════════════════════════════════
+
+const TAG_MAP = {
+  new:  { label:'新上线', cls:'tag-new'  },
+  hot:  { label:'热门',   cls:'tag-hot'  },
+  soon: { label:'即将上线', cls:'tag-soon' },
+};
+
+const grid = document.getElementById('game-grid');
+
+GAMES.forEach(g => {
+  const isSoon = g.tag === 'soon';
+  const tagHTML = g.tag && TAG_MAP[g.tag]
+    ? `<span class="card-tag ${TAG_MAP[g.tag].cls}">${TAG_MAP[g.tag].label}</span>`
+    : '';
+
+  const card = document.createElement('a');
+  card.className = 'card' + (isSoon ? ' coming-soon' : '');
+  card.href = isSoon ? '#' : g.file;
+  card.innerHTML = `
+    <div class="card-cover" style="background:${g.bg}">
+      ${tagHTML}
+      ${g.emoji}
+    </div>
+    <div class="card-body">
+      <div class="card-title">${g.title}</div>
+      <div class="card-desc">${g.desc}</div>
+      <div class="card-meta">
+        <span class="card-grade">${g.grade}</span>
+        <span class="card-btn">${isSoon ? '敬请期待' : '开始玩 →'}</span>
+      </div>
+    </div>
+  `;
+  grid.appendChild(card);
+});
+</script>
+</body>
+</html>

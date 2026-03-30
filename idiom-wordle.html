@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>成语猜猜看</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+
+  :root {
+    --bg: #fdf6e3;
+    --paper: #fffdf5;
+    --ink: #2c1810;
+    --ink-light: #7a5c4a;
+    --red: #c0392b;
+    --gold: #d4a017;
+    --green: #2d6a4f;
+    --green-light: #d8f3dc;
+    --yellow: #e07b00;
+    --yellow-light: #fff3cd;
+    --gray: #9e9e9e;
+    --gray-light: #f0ede6;
+    --border: #c8b89a;
+    --shadow: rgba(44,24,16,0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(212,160,23,0.06) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(192,57,43,0.05) 0%, transparent 50%);
+    font-family: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px 40px;
+    color: var(--ink);
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .title-wrap {
+    position: relative;
+    display: inline-block;
+  }
+  .title-deco {
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    font-family: Georgia, serif;
+  }
+  h1 {
+    font-size: clamp(26px, 8vw, 36px);
+    color: var(--red);
+    letter-spacing: 8px;
+    line-height: 1;
+    text-shadow: 2px 2px 0 rgba(192,57,43,0.15);
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--ink-light);
+    margin-top: 6px;
+    letter-spacing: 2px;
+    font-family: Georgia, serif;
+  }
+  .divider {
+    width: 120px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 10px auto 0;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--ink-light);
+    font-family: Georgia, serif;
+  }
+  .stat { display: flex; align-items: center; gap: 4px; }
+  .stat-num { font-size: 18px; font-weight: bold; color: var(--red); font-family: 'Ma Shan Zheng', serif; }
+
+  /* Grid */
+  .grid-wrapper {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(12px, 3vw, 20px);
+    box-shadow: 0 4px 20px var(--shadow), inset 0 1px 0 rgba(255,255,255,0.8);
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .grid-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 1px dashed rgba(200,184,154,0.4);
+    border-radius: 8px;
+    pointer-events: none;
+  }
+
+  .grid {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(5px, 1.5vw, 8px);
+  }
+
+  .grid-row {
+    display: flex;
+    gap: clamp(5px, 1.5vw, 8px);
+  }
+
+  .cell {
+    width: clamp(48px, 14vw, 62px);
+    height: clamp(48px, 14vw, 62px);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(18px, 5vw, 26px);
+    background: var(--paper);
+    transition: all 0.15s ease;
+    position: relative;
+    cursor: default;
+  }
+  .cell.active-row {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px rgba(212,160,23,0.3);
+  }
+  .cell.filled {
+    border-color: var(--ink-light);
+    background: #fff;
+    animation: pop 0.1s ease;
+  }
+  @keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .cell.correct {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+    animation: flip 0.4s ease;
+  }
+  .cell.present {
+    background: var(--yellow);
+    border-color: var(--yellow);
+    color: #fff;
+    animation: flip 0.4s ease;
+  }
+  .cell.absent {
+    background: #bfb8ad;
+    border-color: #bfb8ad;
+    color: #fff;
+    animation: flip 0.4s ease;
+  }
+  @keyframes flip {
+    0% { transform: rotateX(0); }
+    50% { transform: rotateX(-90deg); }
+    100% { transform: rotateX(0); }
+  }
+  .cell.shake { animation: shake 0.4s ease; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+
+  /* Hint button */
+  .hint-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    width: 100%;
+    max-width: min(320px, 95vw);
+  }
+  .hint-btn {
+    background: none;
+    border: 1.5px solid var(--gold);
+    color: var(--gold);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-family: 'Ma Shan Zheng', serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .hint-btn:hover { background: rgba(212,160,23,0.1); }
+  .hint-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hint-count {
+    font-size: 12px;
+    color: var(--ink-light);
+    font-family: Georgia, serif;
+  }
+
+  .hint-box {
+    background: var(--yellow-light);
+    border: 1px solid rgba(224,123,0,0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 15px;
+    color: var(--yellow);
+    margin-bottom: 14px;
+    max-width: min(320px, 95vw);
+    width: 100%;
+    text-align: center;
+    animation: fadeIn 0.3s ease;
+    line-height: 1.6;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(-4px); } to { opacity:1; transform: translateY(0); } }
+
+  /* Character pool */
+  .pool-label {
+    font-size: 12px;
+    color: var(--ink-light);
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+    font-family: Georgia, serif;
+    text-align: center;
+  }
+  .char-pool {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: min(340px, 95vw);
+    margin-bottom: 16px;
+  }
+  .char-btn {
+    width: clamp(40px, 11vw, 52px);
+    height: clamp(40px, 11vw, 52px);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--paper);
+    font-size: clamp(16px, 4.5vw, 22px);
+    font-family: 'Ma Shan Zheng', serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--ink);
+    box-shadow: 0 2px 4px var(--shadow);
+    position: relative;
+  }
+  .char-btn:hover:not(:disabled) {
+    border-color: var(--red);
+    background: #fff8f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow);
+  }
+  .char-btn:active:not(:disabled) { transform: translateY(0); }
+  .char-btn.used { opacity: 0.3; }
+  .char-btn.correct-used { background: var(--green-light); border-color: var(--green); color: var(--green); opacity: 0.6; }
+  .char-btn.present-used { background: var(--yellow-light); border-color: var(--yellow); color: var(--yellow); opacity: 0.6; }
+
+  /* Action buttons */
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .btn-del {
+    padding: 10px 20px;
+    border: 2px solid var(--border);
+    background: var(--paper);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: 'Ma Shan Zheng', serif;
+    cursor: pointer;
+    color: var(--ink);
+    transition: all 0.15s;
+  }
+  .btn-del:hover { border-color: var(--red); color: var(--red); }
+  .btn-submit {
+    padding: 10px 28px;
+    border: none;
+    background: var(--red);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: 'Ma Shan Zheng', serif;
+    cursor: pointer;
+    color: #fff;
+    transition: all 0.15s;
+    box-shadow: 0 3px 8px rgba(192,57,43,0.3);
+    letter-spacing: 2px;
+  }
+  .btn-submit:hover { background: #a93226; transform: translateY(-1px); }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--ink-light);
+    font-family: Georgia, serif;
+    margin-bottom: 16px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Message */
+  .message {
+    font-size: 18px;
+    text-align: center;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    animation: fadeIn 0.3s ease;
+    font-family: 'Ma Shan Zheng', serif;
+    letter-spacing: 2px;
+  }
+  .message.win { background: var(--green-light); color: var(--green); border: 1px solid rgba(45,106,79,0.3); }
+  .message.lose { background: #fde8e8; color: var(--red); border: 1px solid rgba(192,57,43,0.3); }
+
+  .btn-restart {
+    padding: 10px 28px;
+    border: 2px solid var(--red);
+    background: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: 'Ma Shan Zheng', serif;
+    cursor: pointer;
+    color: var(--red);
+    transition: all 0.15s;
+    letter-spacing: 2px;
+  }
+  .btn-restart:hover { background: var(--red); color: #fff; }
+
+  /* Idiom meaning reveal */
+  .meaning-box {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    max-width: min(320px, 95vw);
+    width: 100%;
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--ink-light);
+    margin-bottom: 14px;
+    animation: fadeIn 0.4s ease;
+  }
+  .meaning-box .idiom-answer {
+    font-size: 22px;
+    color: var(--red);
+    letter-spacing: 6px;
+    display: block;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-deco">猜成语游戏</div>
+  <div class="title-wrap">
+    <h1>成语猜猜看</h1>
+  </div>
+  <div class="subtitle">六次机会 · 找出隐藏的成语</div>
+  <div class="divider"></div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><span class="stat-num" id="stat-wins">0</span> 胜</div>
+  <div class="stat"><span class="stat-num" id="stat-streak">0</span> 连胜</div>
+  <div class="stat"><span class="stat-num" id="stat-played">0</span> 局</div>
+</div>
+
+<div class="hint-area">
+  <button class="hint-btn" id="hintBtn" onclick="showHint()">💡 提示</button>
+  <span class="hint-count" id="hintCount">剩余 2 次提示</span>
+</div>
+
+<div class="hint-box" id="hintBox" style="display:none"></div>
+
+<div class="grid-wrapper">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#2d6a4f"></div>位置正确</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#e07b00"></div>有但位置错</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#bfb8ad"></div>不在其中</div>
+</div>
+
+<div id="messageArea"></div>
+<div id="meaningArea"></div>
+
+<div class="pool-label">这些字可以组成多个成语 · 找到今天那个</div>
+<div class="char-pool" id="charPool"></div>
+
+<div class="actions">
+  <button class="btn-del" onclick="deleteLast()">← 删除</button>
+  <button class="btn-submit" id="submitBtn" onclick="submitGuess()">确认猜测</button>
+</div>
+
+<button class="btn-restart" id="restartBtn" onclick="restart()" style="display:none">换一题 →</button>
+
+<script>
+// ── 成语题库（方案B：干扰字全部来自真实关联成语，制造歧义）────
+const IDIOMS = [
+  {
+    answer: ['掩', '耳', '盗', '铃'],
+    hints: ['和欺骗自己有关', '捂住了某个器官', '和声音有关'],
+    meaning: '捂住自己的耳朵去偷铃铛。比喻自欺欺人，明明掩盖不住的事情偏要想法掩盖。',
+    // 关联：耳聪目明 / 掩人耳目 / 盗名欺世
+    decoys: ['聪', '目', '明', '人', '名', '欺', '世', '遮', '听', '捂', '蒙', '藏']
+  },
+  {
+    answer: ['画', '蛇', '添', '足'],
+    hints: ['做了多余的事', '和动物有关', '原本已经画好了'],
+    meaning: '画好了蛇，再给蛇添上脚。比喻多此一举，反而把事情弄坏。',
+    // 关联：画龙点睛 / 蛇鼠一窝 / 添砖加瓦 / 手足情深
+    decoys: ['龙', '点', '睛', '鼠', '砖', '加', '瓦', '手', '情', '深', '虎', '笔']
+  },
+  {
+    answer: ['守', '株', '待', '兔'],
+    hints: ['和等待有关', '故事里有一棵树桩', '和小动物有关'],
+    meaning: '守着树桩等兔子撞上来。比喻不主动努力，妄想靠侥幸得到成功。',
+    // 关联：守望相助 / 株连九族 / 待机而动 / 兔死狐悲
+    decoys: ['望', '相', '助', '连', '族', '机', '而', '动', '死', '狐', '悲', '林']
+  },
+  {
+    answer: ['亡', '羊', '补', '牢'],
+    hints: ['和动物有关', '出了问题再想办法', '和圈养动物有关'],
+    meaning: '羊跑了之后再去修补羊圈。比喻出了问题后及时补救，还不算晚。',
+    // 关联：亡命天涯 / 羊肠小道 / 补天浴日 / 牢不可破
+    decoys: ['命', '天', '涯', '肠', '道', '浴', '日', '不', '可', '破', '失', '逃']
+  },
+  {
+    answer: ['半', '途', '而', '废'],
+    hints: ['和坚持有关', '做事没有做完就停了', '在路上发生的事'],
+    meaning: '走到半路就放弃了。比喻做事不能坚持到底，中途放弃。',
+    // 关联：半信半疑 / 途穷末路 / 而立之年 / 废寝忘食
+    decoys: ['信', '疑', '穷', '末', '路', '立', '年', '寝', '忘', '食', '中', '止']
+  },
+  {
+    answer: ['一', '石', '二', '鸟'],
+    hints: ['和效率有关', '做一件事收获两个结果', '和石头有关'],
+    meaning: '扔一块石头打中两只鸟。比喻做一件事同时达到两个目的。',
+    // 关联：一箭双雕 / 石破天惊 / 二话不说 / 鸟语花香
+    decoys: ['箭', '双', '雕', '破', '天', '惊', '话', '说', '语', '花', '香', '举']
+  },
+  {
+    answer: ['叶', '公', '好', '龙'],
+    hints: ['和表里不一有关', '故事里有一个人的名字', '真正的来了反而害怕'],
+    meaning: '叶公喜欢龙，可真龙来了他却吓跑了。比喻表面上爱好，实际上并不真心。',
+    // 关联：叶落归根 / 公正无私 / 好高骛远 / 龙飞凤舞
+    decoys: ['落', '归', '根', '正', '私', '高', '远', '飞', '凤', '舞', '假', '喜']
+  },
+  {
+    answer: ['狐', '假', '虎', '威'],
+    hints: ['和借势有关', '故事里有两种动物', '一种动物借用了另一种的力量'],
+    meaning: '狐狸借着老虎的威风吓唬其他动物。比喻倚仗别人的势力欺压人。',
+    // 关联：狐疑不决 / 假公济私 / 虎背熊腰 / 威风凛凛
+    decoys: ['疑', '决', '公', '济', '私', '背', '熊', '腰', '风', '凛', '势', '借']
+  },
+  {
+    answer: ['对', '牛', '弹', '琴'],
+    hints: ['和沟通有关', '做了没有意义的事', '和音乐有关'],
+    meaning: '对着牛弹琴。比喻对不懂道理的人讲道理，白费口舌。',
+    // 关联：对症下药 / 牛气冲天 / 弹指一挥 / 琴棋书画
+    decoys: ['症', '药', '气', '冲', '天', '指', '挥', '棋', '书', '画', '白', '费']
+  },
+  {
+    answer: ['井', '底', '之', '蛙'],
+    hints: ['和眼界有关', '故事里有一种动物', '视野很受限的地方'],
+    meaning: '住在井底的青蛙，只能看到井口那么大的天空。比喻见识短浅、眼界狭小。',
+    // 关联：井井有条 / 底薪抽薪 / 之乎者也 / 蛙鸣蝉噪 / 坐井观天
+    decoys: ['有', '条', '抽', '薪', '乎', '者', '也', '鸣', '坐', '观', '天', '小']
+  },
+];
+
+// ── 游戏状态 ──────────────────────────────────────────────
+const MAX_ROWS = 6;
+let puzzle, answer, decoys, hints;
+let currentRow = 0;
+let currentInput = [];
+let grid = [];
+let gameOver = false;
+let hintsLeft = 2;
+let hintsShown = 0;
+let stats = { wins: 0, streak: 0, played: 0 };
+let charBtnMap = {};
+
+function initPuzzle() {
+  const idx = Math.floor(Math.random() * IDIOMS.length);
+  puzzle = IDIOMS[idx];
+  answer = puzzle.answer;
+  decoys = puzzle.decoys; // 使用全部干扰字
+  hints = puzzle.hints;
+  currentRow = 0;
+  currentInput = [];
+  gameOver = false;
+  hintsLeft = 2;
+  hintsShown = 0;
+  charBtnMap = {};
+
+  document.getElementById('hintBox').style.display = 'none';
+  document.getElementById('messageArea').innerHTML = '';
+  document.getElementById('meaningArea').innerHTML = '';
+  document.getElementById('restartBtn').style.display = 'none';
+  document.getElementById('submitBtn').disabled = false;
+  document.getElementById('hintBtn').disabled = false;
+  document.getElementById('hintCount').textContent = `剩余 ${hintsLeft} 次提示`;
+
+  buildGrid();
+  buildPool();
+  updateStats();
+}
+
+function buildGrid() {
+  const g = document.getElementById('grid');
+  g.innerHTML = '';
+  grid = [];
+  for (let r = 0; r < MAX_ROWS; r++) {
+    const row = document.createElement('div');
+    row.className = 'grid-row';
+    const cells = [];
+    for (let c = 0; c < 4; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell' + (r === 0 ? ' active-row' : '');
+      row.appendChild(cell);
+      cells.push(cell);
+    }
+    g.appendChild(row);
+    grid.push(cells);
+  }
+}
+
+function buildPool() {
+  const pool = document.getElementById('charPool');
+  pool.innerHTML = '';
+  const allChars = shuffleArray([...answer, ...decoys]);
+  allChars.forEach(ch => {
+    const btn = document.createElement('button');
+    btn.className = 'char-btn';
+    btn.textContent = ch;
+    btn.dataset.char = ch;
+    btn.onclick = () => inputChar(ch, btn);
+    pool.appendChild(btn);
+    if (!charBtnMap[ch]) charBtnMap[ch] = [];
+    charBtnMap[ch].push(btn);
+  });
+}
+
+// 刷新字池中每个按钮的"本行已用"视觉状态
+function refreshPoolState() {
+  // 统计本行 currentInput 中每个字已用几次
+  const usedCount = {};
+  currentInput.forEach(item => {
+    usedCount[item.ch] = (usedCount[item.ch] || 0) + 1;
+  });
+  // 对每个字的按钮列表，按顺序标记已用/未用
+  document.querySelectorAll('.char-btn').forEach(btn => {
+    // 只处理本行 used 态，不碰 correct-used / present-used
+    if (!btn.classList.contains('correct-used') && !btn.classList.contains('present-used')) {
+      btn.classList.remove('used');
+    }
+  });
+  Object.entries(usedCount).forEach(([ch, count]) => {
+    const btns = charBtnMap[ch] || [];
+    for (let i = 0; i < count && i < btns.length; i++) {
+      btns[i].classList.add('used');
+    }
+  });
+}
+
+function inputChar(ch, btn) {
+  if (gameOver) return;
+  if (currentInput.length >= 4) return;
+  currentInput.push({ ch, btn });
+  const cell = grid[currentRow][currentInput.length - 1];
+  cell.textContent = ch;
+  cell.classList.add('filled');
+  refreshPoolState();
+}
+
+function deleteLast() {
+  if (gameOver) return;
+  if (currentInput.length === 0) return;
+  currentInput.pop();
+  const cell = grid[currentRow][currentInput.length];
+  cell.textContent = '';
+  cell.classList.remove('filled');
+  refreshPoolState();
+}
+
+function submitGuess() {
+  if (gameOver) return;
+  if (currentInput.length < 4) {
+    shakeRow(currentRow);
+    return;
+  }
+
+  const guess = currentInput.map(i => i.ch);
+  const result = evaluate(guess, answer);
+  revealRow(currentRow, guess, result);
+
+  const won = result.every(r => r === 'correct');
+
+  setTimeout(() => {
+    if (won) {
+      gameOver = true;
+      stats.wins++;
+      stats.streak++;
+      stats.played++;
+      showMessage('win', `🎉 太棒了！第 ${currentRow + 1} 次猜中！`);
+      showMeaning();
+      document.getElementById('restartBtn').style.display = 'block';
+      document.getElementById('submitBtn').disabled = true;
+      updateStats();
+    } else {
+      currentRow++;
+      if (currentRow >= MAX_ROWS) {
+        gameOver = true;
+        stats.streak = 0;
+        stats.played++;
+        showMessage('lose', `答案是：${answer.join('')}`);
+        showMeaning();
+        document.getElementById('restartBtn').style.display = 'block';
+        document.getElementById('submitBtn').disabled = true;
+        updateStats();
+      } else {
+        currentInput = [];
+        setActiveRow(currentRow);
+        // 每行完全重置备选字，所有按钮恢复可选
+        document.querySelectorAll('.char-btn').forEach(b => {
+          b.classList.remove('used', 'correct-used', 'present-used');
+        });
+      }
+    }
+  }, 500);
+}
+
+function evaluate(guess, answer) {
+  const result = Array(4).fill('absent');
+  const answerCopy = [...answer];
+  const guessChecked = Array(4).fill(false);
+
+  // First pass: correct
+  for (let i = 0; i < 4; i++) {
+    if (guess[i] === answerCopy[i]) {
+      result[i] = 'correct';
+      answerCopy[i] = null;
+      guessChecked[i] = true;
+    }
+  }
+  // Second pass: present
+  for (let i = 0; i < 4; i++) {
+    if (guessChecked[i]) continue;
+    const idx = answerCopy.indexOf(guess[i]);
+    if (idx !== -1) {
+      result[i] = 'present';
+      answerCopy[idx] = null;
+    }
+  }
+  return result;
+}
+
+function revealRow(row, guess, result) {
+  const delay = [0, 150, 300, 450];
+  result.forEach((r, i) => {
+    setTimeout(() => {
+      const cell = grid[row][i];
+      cell.classList.remove('active-row', 'filled');
+      cell.classList.add(r === 'correct' ? 'correct' : r === 'present' ? 'present' : 'absent');
+    }, delay[i]);
+  });
+
+  // 提交后短暂高亮按钮颜色，600ms后恢复全部可选
+  setTimeout(() => {
+    result.forEach((r, i) => {
+      const ch = guess[i];
+      const btns = charBtnMap[ch] || [];
+      btns.forEach(btn => {
+        btn.classList.remove('used','correct-used','present-used');
+        if (r === 'correct') btn.classList.add('correct-used');
+        else if (r === 'present') btn.classList.add('present-used');
+      });
+    });
+    // 300ms后清除所有按钮颜色标记，下一行全部可选
+    setTimeout(() => {
+      document.querySelectorAll('.char-btn').forEach(b => {
+        b.classList.remove('used','correct-used','present-used');
+      });
+    }, 300);
+  }, 600);
+}
+
+function shakeRow(row) {
+  grid[row].forEach(cell => {
+    cell.classList.add('shake');
+    setTimeout(() => cell.classList.remove('shake'), 400);
+  });
+}
+
+function setActiveRow(row) {
+  for (let r = 0; r < MAX_ROWS; r++) {
+    grid[r].forEach(cell => cell.classList.toggle('active-row', r === row));
+  }
+}
+
+function showHint() {
+  if (hintsShown >= hints.length || hintsLeft <= 0) return;
+  const box = document.getElementById('hintBox');
+  box.style.display = 'block';
+  box.textContent = `💡 提示：${hints[hintsShown]}`;
+  hintsShown++;
+  hintsLeft--;
+  document.getElementById('hintCount').textContent = `剩余 ${hintsLeft} 次提示`;
+  if (hintsLeft === 0) document.getElementById('hintBtn').disabled = true;
+}
+
+function showMessage(type, text) {
+  const el = document.getElementById('messageArea');
+  el.innerHTML = `<div class="message ${type}">${text}</div>`;
+}
+
+function showMeaning() {
+  const el = document.getElementById('meaningArea');
+  el.innerHTML = `<div class="meaning-box"><span class="idiom-answer">${answer.join(' ')}</span>${puzzle.meaning}</div>`;
+}
+
+function updateStats() {
+  document.getElementById('stat-wins').textContent = stats.wins;
+  document.getElementById('stat-streak').textContent = stats.streak;
+  document.getElementById('stat-played').textContent = stats.played;
+}
+
+function restart() {
+  initPuzzle();
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ── Start ─────────────────────────────────────────────────
+initPuzzle();
+</script>
+</body>
+</html>

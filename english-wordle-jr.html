@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>英语猜词 · 小学版</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+  :root {
+    --bg: #e8f4fd;
+    --card: #ffffff;
+    --blue: #2196f3;
+    --blue-dark: #1565c0;
+    --blue-light: #e3f2fd;
+    --green: #43a047;
+    --green-light: #e8f5e9;
+    --yellow: #f9a825;
+    --yellow-light: #fff8e1;
+    --gray: #90a4ae;
+    --gray-light: #eceff1;
+    --red: #e53935;
+    --ink: #1a237e;
+    --ink-soft: #546e7a;
+    --shadow: rgba(33,150,243,0.15);
+    --border: #bbdefb;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 10% 10%, rgba(33,150,243,0.12) 0%, transparent 40%),
+      radial-gradient(circle at 90% 90%, rgba(67,160,71,0.08) 0%, transparent 40%);
+    font-family: 'Nunito', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 10px 40px;
+    color: var(--ink);
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+  .tag {
+    display: inline-block;
+    background: var(--blue);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: clamp(24px, 7vw, 32px);
+    font-weight: 900;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+  h1 span { color: var(--blue); }
+  .subtitle {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+    font-weight: 600;
+  }
+
+  /* Info row */
+  .info-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .level-badge {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+  }
+  .topic-badge {
+    background: var(--green-light);
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1.5px solid #c8e6c9;
+  }
+  .letters-badge {
+    background: var(--yellow-light);
+    color: #e65100;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1.5px solid #ffe082;
+  }
+
+  /* Grid */
+  .grid-card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: clamp(12px, 3vw, 20px) clamp(14px, 4vw, 24px);
+    box-shadow: 0 8px 32px var(--shadow), 0 1px 0 rgba(255,255,255,0.8);
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+
+  .grid { display: flex; flex-direction: column; gap: clamp(5px, 1.5vw, 8px); }
+  .grid-row { display: flex; gap: clamp(5px, 1.5vw, 8px); }
+
+  .cell {
+    width: clamp(44px, 13vw, 58px);
+    height: clamp(44px, 13vw, 58px);
+    border: 2.5px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(16px, 4.5vw, 22px);
+    font-weight: 900;
+    background: #fff;
+    transition: all 0.15s;
+    position: relative;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+  .cell.locked {
+    background: var(--blue-light);
+    border-color: var(--blue);
+    color: var(--blue-dark);
+  }
+  .cell.locked::after {
+    content: '🔒';
+    position: absolute;
+    font-size: 9px;
+    top: 2px;
+    right: 3px;
+  }
+  .cell.active-row { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(33,150,243,0.2); }
+  .cell.filled { border-color: var(--ink); animation: pop 0.1s ease; }
+  @keyframes pop { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+  .cell.correct { background: var(--green); border-color: var(--green); color: #fff; animation: flip 0.4s ease; }
+  .cell.present { background: var(--yellow); border-color: var(--yellow); color: #fff; animation: flip 0.4s ease; }
+  .cell.absent { background: var(--gray); border-color: var(--gray); color: #fff; animation: flip 0.4s ease; }
+  @keyframes flip { 0%{transform:rotateX(0)} 50%{transform:rotateX(-90deg)} 100%{transform:rotateX(0)} }
+  .cell.shake { animation: shake 0.4s ease; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+
+  /* Hint area */
+  .hint-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .hint-btn {
+    background: var(--yellow-light);
+    border: 2px solid var(--yellow);
+    color: #e65100;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Nunito', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .hint-btn:hover:not(:disabled) { background: var(--yellow); color: #fff; }
+  .hint-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hint-count { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+
+  .hint-box {
+    background: var(--yellow-light);
+    border: 2px solid rgba(249,168,37,0.4);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 14px;
+    color: #e65100;
+    margin-bottom: 12px;
+    max-width: 340px;
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+    animation: fadeIn 0.3s ease;
+    line-height: 1.5;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    font-weight: 700;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Keyboard */
+  .keyboard-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .keyboard {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .kb-row { display: flex; gap: clamp(3px, 1vw, 5px); justify-content: center; }
+  .kb-key {
+    min-width: clamp(24px, 7vw, 32px);
+    height: clamp(36px, 10vw, 44px);
+    padding: 0 clamp(3px, 1vw, 6px);
+    border: none;
+    border-radius: 8px;
+    background: var(--card);
+    font-size: clamp(11px, 3vw, 14px);
+    font-weight: 800;
+    font-family: 'Nunito', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--ink);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1), 0 1px 0 rgba(255,255,255,0.8);
+    text-transform: uppercase;
+  }
+  .kb-key:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.12); }
+  .kb-key:active { transform: translateY(0); }
+  .kb-key.correct { background: var(--green); color: #fff; }
+  .kb-key.present { background: var(--yellow); color: #fff; }
+  .kb-key.absent { background: var(--gray-light); color: var(--gray); pointer-events: none; }
+  .kb-key.wide { min-width: clamp(38px, 10vw, 52px); font-size: clamp(10px, 2.5vw, 12px); }
+
+  /* Message */
+  .message {
+    font-size: 16px;
+    font-weight: 800;
+    text-align: center;
+    padding: 10px 20px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    animation: fadeIn 0.3s ease;
+  }
+  .message.win { background: var(--green-light); color: var(--green); border: 2px solid #c8e6c9; }
+  .message.lose { background: #ffebee; color: var(--red); border: 2px solid #ffcdd2; }
+
+  .word-reveal {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 20px;
+    max-width: min(340px, 95vw);
+    width: 100%;
+    text-align: center;
+    margin-bottom: 12px;
+    animation: fadeIn 0.4s ease;
+  }
+  .word-reveal .word { font-size: 28px; font-weight: 900; color: var(--blue-dark); letter-spacing: 4px; text-transform: uppercase; }
+  .word-reveal .zh { font-size: 15px; color: var(--green); font-weight: 700; margin-top: 4px; }
+  .word-reveal .phonetic { font-size: 13px; color: var(--ink-soft); font-weight: 600; margin-top: 2px; }
+  .word-reveal .example { font-size: 12px; color: var(--ink-soft); margin-top: 6px; font-style: italic; border-top: 1px solid var(--border); padding-top: 6px; }
+
+  .btn-restart {
+    padding: 10px 28px;
+    border: 2.5px solid var(--blue);
+    background: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: 'Nunito', sans-serif;
+    cursor: pointer;
+    color: var(--blue);
+    transition: all 0.15s;
+  }
+  .btn-restart:hover { background: var(--blue); color: #fff; }
+
+  .difficulty-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .diff-btn {
+    padding: 5px 14px;
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    background: var(--card);
+    font-size: clamp(10px, 2.5vw, 12px);
+    font-weight: 700;
+    font-family: 'Nunito', sans-serif;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: all 0.15s;
+  }
+  .diff-btn.active { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">小学英语版</div>
+  <h1>Word<span>le</span> Jr.</h1>
+  <div class="subtitle">猜出今天的英语单词 · 每次有颜色提示</div>
+</header>
+
+<div class="difficulty-row">
+  <button class="diff-btn active" onclick="setDifficulty('easy')" id="diff-easy">🌱 简单（给2个字母）</button>
+  <button class="diff-btn" onclick="setDifficulty('medium')" id="diff-medium">⭐ 中等（给1个字母）</button>
+  <button class="diff-btn" onclick="setDifficulty('hard')" id="diff-hard">🔥 挑战（不给字母）</button>
+</div>
+
+<div class="info-row">
+  <span class="level-badge" id="levelBadge">📚 小学词汇</span>
+  <span class="topic-badge" id="topicBadge">🏷️ 加载中...</span>
+  <span class="letters-badge" id="lettersBadge">🔤 4个字母</span>
+</div>
+
+<div class="hint-area">
+  <button class="hint-btn" id="hintBtn" onclick="showHint()">💡 中文提示</button>
+  <span class="hint-count" id="hintCount">剩余 2 次</span>
+</div>
+<div class="hint-box" id="hintBox" style="display:none"></div>
+
+<div class="grid-card">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#43a047"></div>位置正确</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f9a825"></div>有但位置错</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#90a4ae"></div>不在其中</div>
+</div>
+
+<div id="messageArea"></div>
+<div id="wordReveal"></div>
+
+<div class="keyboard-label">点击字母输入</div>
+<div class="keyboard" id="keyboard"></div>
+
+<button class="btn-restart" id="restartBtn" onclick="restart()" style="display:none">🔄 再来一题</button>
+
+<script>
+// ── 词库 ──────────────────────────────────────────────────
+const WORDS = [
+  { word: 'BIRD', topic: '动物', zh: '鸟', phonetic: '/bɜːrd/', example: 'I see a bird in the tree.', hints: ['它会飞', '有翅膀和羽毛', '在天空中飞翔'] },
+  { word: 'FISH', topic: '动物', zh: '鱼', phonetic: '/fɪʃ/', example: 'The fish swims in the lake.', hints: ['它生活在水里', '用鳃呼吸', '喜欢游泳'] },
+  { word: 'FROG', topic: '动物', zh: '青蛙', phonetic: '/frɒɡ/', example: 'The frog jumps on the lily pad.', hints: ['它会跳', '住在水边', '呱呱叫'] },
+  { word: 'BEAR', topic: '动物', zh: '熊', phonetic: '/beər/', example: 'The bear lives in the forest.', hints: ['它很大，毛茸茸的', '冬天会冬眠', '爱吃蜂蜜'] },
+  { word: 'DUCK', topic: '动物', zh: '鸭子', phonetic: '/dʌk/', example: 'The duck swims in the pond.', hints: ['它嘎嘎叫', '会游泳也会飞', '常见的农场动物'] },
+  { word: 'WOLF', topic: '动物', zh: '狼', phonetic: '/wʊlf/', example: 'The wolf howls at the moon.', hints: ['它会嗥叫', '和狗是亲戚', '住在森林里'] },
+  { word: 'CAKE', topic: '食物', zh: '蛋糕', phonetic: '/keɪk/', example: 'We eat cake at birthday parties.', hints: ['生日时常见', '甜甜的', '上面可以插蜡烛'] },
+  { word: 'MILK', topic: '食物', zh: '牛奶', phonetic: '/mɪlk/', example: 'I drink milk every morning.', hints: ['白色的饮料', '来自奶牛', '对骨头好'] },
+  { word: 'RICE', topic: '食物', zh: '米饭', phonetic: '/raɪs/', example: 'We eat rice every day.', hints: ['白色小粒粒', '中国人最常吃的主食', '用锅煮着吃'] },
+  { word: 'SOUP', topic: '食物', zh: '汤', phonetic: '/suːp/', example: 'Mom makes delicious soup.', hints: ['液体食物', '用碗盛', '热热的喝'] },
+  { word: 'BOOK', topic: '学校', zh: '书', phonetic: '/bʊk/', example: 'I read a book every night.', hints: ['有很多页', '图书馆里有很多', '用来阅读的'] },
+  { word: 'DESK', topic: '学校', zh: '课桌', phonetic: '/desk/', example: 'I study at my desk.', hints: ['放在教室里', '坐在它前面学习', '上面放书本'] },
+  { word: 'DRAW', topic: '学校', zh: '画画', phonetic: '/drɔː/', example: 'I love to draw pictures.', hints: ['用铅笔做的事', '美术课会做', '创造图画'] },
+  { word: 'SING', topic: '学校', zh: '唱歌', phonetic: '/sɪŋ/', example: 'We sing songs in music class.', hints: ['用嘴做的事', '音乐课会做', '发出有旋律的声音'] },
+  { word: 'JUMP', topic: '运动', zh: '跳', phonetic: '/dʒʌmp/', example: 'The kids jump rope in the yard.', hints: ['离地的动作', '用腿做', '兔子的动作'] },
+  { word: 'SWIM', topic: '运动', zh: '游泳', phonetic: '/swɪm/', example: 'I swim in the pool.', hints: ['在水里的运动', '鱼会这个', '需要游泳池'] },
+  { word: 'KICK', topic: '运动', zh: '踢', phonetic: '/kɪk/', example: 'I kick the ball hard.', hints: ['用脚做的动作', '踢足球会用到', '和腿有关'] },
+  { word: 'RAIN', topic: '天气', zh: '雨', phonetic: '/reɪn/', example: 'I use an umbrella in the rain.', hints: ['从天上落下来', '下雨天会看到', '植物需要它'] },
+  { word: 'SNOW', topic: '天气', zh: '雪', phonetic: '/snəʊ/', example: 'Children play in the snow.', hints: ['白色的', '冬天才有', '可以堆雪人'] },
+  { word: 'WIND', topic: '天气', zh: '风', phonetic: '/wɪnd/', example: 'The wind blows the leaves.', hints: ['看不见但能感觉到', '会吹动树叶', '放风筝需要它'] },
+  { word: 'STAR', topic: '自然', zh: '星星', phonetic: '/stɑːr/', example: 'I can see many stars at night.', hints: ['夜晚才能看到', '在天空中', '闪闪发光'] },
+  { word: 'TREE', topic: '自然', zh: '树', phonetic: '/triː/', example: 'There is a big tree in our yard.', hints: ['长在地上', '有树干和树叶', '鸟会在上面筑巢'] },
+  { word: 'LEAF', topic: '自然', zh: '叶子', phonetic: '/liːf/', example: 'The leaf falls from the tree.', hints: ['从树上长出来', '秋天会变黄', '绿色的薄片'] },
+  { word: 'DOOR', topic: '家', zh: '门', phonetic: '/dɔːr/', example: 'Please knock on the door.', hints: ['进出房间要经过它', '可以打开和关闭', '有门把手'] },
+  { word: 'LAMP', topic: '家', zh: '台灯', phonetic: '/læmp/', example: 'Turn on the lamp when it\'s dark.', hints: ['会发光', '放在桌子上', '黑暗时用它'] },
+  { word: 'BALL', topic: '玩具', zh: '球', phonetic: '/bɔːl/', example: 'Let\'s play with the ball!', hints: ['圆圆的', '可以弹跳', '很多运动都用它'] },
+  { word: 'DOLL', topic: '玩具', zh: '玩偶', phonetic: '/dɒl/', example: 'She plays with her doll.', hints: ['像人的玩具', '女孩常玩', '可以给它换衣服'] },
+];
+
+const ROWS = 6;
+const KEYBOARD_ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['⌫','Z','X','C','V','B','N','M','✓']
+];
+
+let puzzle, answer, lockedPositions;
+let currentRow = 0, currentInput = [], grid = [], gameOver = false;
+let hintsLeft = 2, hintsShown = 0;
+let keyStates = {};
+let difficulty = 'easy'; // easy=2 locked, medium=1 locked, hard=0
+
+function setDifficulty(d) {
+  difficulty = d;
+  ['easy','medium','hard'].forEach(x => {
+    document.getElementById('diff-'+x).classList.toggle('active', x === d);
+  });
+  restart();
+}
+
+function getLockedCount() {
+  return difficulty === 'easy' ? 2 : difficulty === 'medium' ? 1 : 0;
+}
+
+function initPuzzle() {
+  const idx = Math.floor(Math.random() * WORDS.length);
+  puzzle = WORDS[idx];
+  answer = puzzle.word.split('');
+  hintsLeft = 2; hintsShown = 0;
+  currentRow = 0; currentInput = []; gameOver = false;
+  keyStates = {};
+
+  // Choose locked positions
+  const lockedCount = getLockedCount();
+  lockedPositions = [];
+  if (lockedCount > 0) {
+    const positions = [0,1,2,3];
+    for (let i = positions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [positions[i],positions[j]] = [positions[j],positions[i]];
+    }
+    lockedPositions = positions.slice(0, lockedCount).sort();
+  }
+
+  document.getElementById('topicBadge').textContent = `🏷️ 主题：${puzzle.topic}`;
+  document.getElementById('lettersBadge').textContent = `🔤 ${answer.length} 个字母`;
+  document.getElementById('hintBox').style.display = 'none';
+  document.getElementById('messageArea').innerHTML = '';
+  document.getElementById('wordReveal').innerHTML = '';
+  document.getElementById('restartBtn').style.display = 'none';
+  document.getElementById('hintBtn').disabled = false;
+  document.getElementById('hintCount').textContent = `剩余 ${hintsLeft} 次`;
+
+  buildGrid();
+  buildKeyboard();
+}
+
+function buildGrid() {
+  const g = document.getElementById('grid');
+  g.innerHTML = '';
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement('div');
+    row.className = 'grid-row';
+    const cells = [];
+    for (let c = 0; c < 4; c++) {
+      const cell = document.createElement('div');
+      const isLocked = lockedPositions.includes(c);
+      cell.className = 'cell' + (isLocked ? ' locked' : '') + (r === 0 && !isLocked ? ' active-row' : '');
+      if (isLocked) {
+        cell.textContent = answer[c];
+        cell.classList.add('correct'); // locked cells shown as correct color
+        cell.style.animation = 'none';
+      }
+      row.appendChild(cell);
+      cells.push(cell);
+    }
+    g.appendChild(row);
+    grid.push(cells);
+  }
+}
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  KEYBOARD_ROWS.forEach(rowKeys => {
+    const row = document.createElement('div');
+    row.className = 'kb-row';
+    rowKeys.forEach(k => {
+      const btn = document.createElement('button');
+      btn.className = 'kb-key' + (k === '⌫' || k === '✓' ? ' wide' : '');
+      btn.textContent = k;
+      btn.id = 'key-' + k;
+      if (k === '⌫') btn.onclick = deleteLast;
+      else if (k === '✓') btn.onclick = submitGuess;
+      else btn.onclick = () => inputChar(k);
+      row.appendChild(btn);
+    });
+    kb.appendChild(row);
+  });
+}
+
+function getActivePositions() {
+  const positions = [];
+  for (let c = 0; c < 4; c++) {
+    if (!lockedPositions.includes(c)) positions.push(c);
+  }
+  return positions;
+}
+
+function inputChar(ch) {
+  if (gameOver) return;
+  const activePos = getActivePositions();
+  if (currentInput.length >= activePos.length) return;
+  currentInput.push(ch);
+  const pos = activePos[currentInput.length - 1];
+  const cell = grid[currentRow][pos];
+  cell.textContent = ch;
+  cell.classList.add('filled');
+}
+
+function deleteLast() {
+  if (gameOver) return;
+  if (currentInput.length === 0) return;
+  const activePos = getActivePositions();
+  const pos = activePos[currentInput.length - 1];
+  const cell = grid[currentRow][pos];
+  cell.textContent = '';
+  cell.classList.remove('filled');
+  currentInput.pop();
+}
+
+function submitGuess() {
+  if (gameOver) return;
+  const activePos = getActivePositions();
+  if (currentInput.length < activePos.length) {
+    shakeRow(currentRow);
+    return;
+  }
+
+  // Build full guess
+  const guess = answer.map((_, i) => lockedPositions.includes(i) ? answer[i] : null);
+  let inputIdx = 0;
+  for (let c = 0; c < 4; c++) {
+    if (!lockedPositions.includes(c)) {
+      guess[c] = currentInput[inputIdx++];
+    }
+  }
+
+  const result = evaluate(guess, answer);
+  revealRow(currentRow, guess, result);
+  updateKeyboard(guess, result);
+
+  const won = result.every(r => r === 'correct');
+  setTimeout(() => {
+    if (won) {
+      gameOver = true;
+      showMessage('win', `🎉 Great job！第 ${currentRow + 1} 次猜中！`);
+      showWordReveal(true);
+      document.getElementById('restartBtn').style.display = 'block';
+    } else {
+      currentRow++;
+      if (currentRow >= ROWS) {
+        gameOver = true;
+        showMessage('lose', `答案是：${answer.join('')}`);
+        showWordReveal(false);
+        document.getElementById('restartBtn').style.display = 'block';
+      } else {
+        currentInput = [];
+        setActiveRow(currentRow);
+      }
+    }
+  }, 500);
+}
+
+function evaluate(guess, answer) {
+  const result = Array(4).fill('absent');
+  const answerCopy = [...answer];
+  // First: correct
+  for (let i = 0; i < 4; i++) {
+    if (guess[i] === answerCopy[i]) {
+      result[i] = 'correct'; answerCopy[i] = null;
+    }
+  }
+  // Second: present
+  for (let i = 0; i < 4; i++) {
+    if (result[i] === 'correct') continue;
+    const idx = answerCopy.indexOf(guess[i]);
+    if (idx !== -1) { result[i] = 'present'; answerCopy[idx] = null; }
+  }
+  return result;
+}
+
+function revealRow(row, guess, result) {
+  const delays = [0, 150, 300, 450];
+  for (let c = 0; c < 4; c++) {
+    if (lockedPositions.includes(c)) continue;
+    setTimeout(() => {
+      const cell = grid[row][c];
+      cell.classList.remove('active-row','filled');
+      cell.classList.add(result[c] === 'correct' ? 'correct' : result[c] === 'present' ? 'present' : 'absent');
+    }, delays[c]);
+  }
+}
+
+function updateKeyboard(guess, result) {
+  setTimeout(() => {
+    for (let c = 0; c < 4; c++) {
+      const ch = guess[c];
+      const key = document.getElementById('key-' + ch);
+      if (!key) continue;
+      const cur = key.className;
+      if (result[c] === 'correct') { key.classList.remove('present','absent'); key.classList.add('correct'); }
+      else if (result[c] === 'present' && !cur.includes('correct')) { key.classList.add('present'); }
+      else if (result[c] === 'absent' && !cur.includes('correct') && !cur.includes('present')) { key.classList.add('absent'); }
+    }
+  }, 600);
+}
+
+function shakeRow(row) {
+  grid[row].forEach(cell => {
+    if (!lockedPositions.includes(Array.from(cell.parentNode.children).indexOf(cell))) {
+      cell.classList.add('shake');
+      setTimeout(() => cell.classList.remove('shake'), 400);
+    }
+  });
+}
+
+function setActiveRow(row) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (!lockedPositions.includes(c)) {
+        grid[r][c].classList.toggle('active-row', r === row);
+      }
+    }
+  }
+}
+
+function showHint() {
+  if (hintsShown >= puzzle.hints.length || hintsLeft <= 0) return;
+  const box = document.getElementById('hintBox');
+  box.style.display = 'block';
+  box.textContent = `💡 ${puzzle.hints[hintsShown]}`;
+  hintsShown++; hintsLeft--;
+  document.getElementById('hintCount').textContent = `剩余 ${hintsLeft} 次`;
+  if (hintsLeft === 0) document.getElementById('hintBtn').disabled = true;
+}
+
+function showMessage(type, text) {
+  document.getElementById('messageArea').innerHTML = `<div class="message ${type}">${text}</div>`;
+}
+
+function showWordReveal(won) {
+  document.getElementById('wordReveal').innerHTML = `
+    <div class="word-reveal">
+      <div class="word">${puzzle.word}</div>
+      <div class="zh">${puzzle.zh}</div>
+      <div class="phonetic">${puzzle.phonetic}</div>
+      <div class="example">${puzzle.example}</div>
+    </div>`;
+}
+
+function restart() { initPuzzle(); }
+
+initPuzzle();
+</script>
+</body>
+</html>

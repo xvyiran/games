@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>完整页面 · 儿童游戏平台</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  background: #E8F4FD;
+  padding: 32px 16px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.page-title {
+  font-size: 12px; font-weight: 700; color: #666;
+  letter-spacing: 0.08em;
+  background: rgba(255,255,255,0.75);
+  padding: 5px 18px; border-radius: 20px;
+}
+
+.row {
+  display: flex; gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  width: 100%; max-width: 1100px;
+}
+
+.col {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 8px;
+}
+
+.col-label {
+  font-size: 10px; font-weight: 700; color: #888;
+  letter-spacing: 0.05em;
+  background: rgba(255,255,255,0.6);
+  padding: 3px 12px; border-radius: 12px;
+}
+
+/* ═══════════════════════════
+   PHONE SHELL
+═══════════════════════════ */
+.phone {
+  width: 290px; height: 628px;
+  background: #FFFDF8;
+  border-radius: 44px;
+  border: 2.5px solid #CCC8BE;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.16), 0 4px 12px rgba(0,0,0,0.08);
+  display: flex; flex-direction: column;
+  position: relative;
+}
+
+.di {
+  position: absolute; top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 84px; height: 25px;
+  background: #111; border-radius: 15px; z-index: 30;
+}
+
+.screen {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; padding-top: 44px;
+}
+
+.scroll-body {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.scroll-body::-webkit-scrollbar { display: none; }
+
+/* ═══════════════════════════
+   BOTTOM NAV
+═══════════════════════════ */
+.bnav {
+  background: #fff;
+  border-top: 1.5px solid #EEE9DF;
+  display: flex; justify-content: space-around;
+  padding: 7px 0 16px; flex-shrink: 0; z-index: 10;
+}
+.ni {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 2px;
+  font-size: 9px; font-weight: 700; color: #C8C4BC;
+  min-width: 56px; cursor: pointer;
+}
+.ni.on { color: #58CC02; }
+.nb {
+  width: 38px; height: 26px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.ni.on .nb { background: #EDFAD0; }
+.nbadge {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #FF4B4B; border: 1.5px solid #fff;
+  position: absolute; top: 0; right: 0;
+}
+
+/* ═══════════════════════════
+   SHARED COMPONENTS
+═══════════════════════════ */
+.sec-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 13px 7px;
+}
+.sec-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sec-title { font-size: 13px; font-weight: 900; color: #2D2D2D; flex: 1; }
+.sec-more { font-size: 10px; font-weight: 700; color: #58CC02; }
+
+/* Game card grid */
+.ggrid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; padding: 0 13px 4px;
+}
+
+.gc {
+  border-radius: 17px; padding: 12px 11px 10px;
+  display: flex; flex-direction: column; gap: 5px;
+  cursor: pointer; position: relative;
+  border: 1.5px solid var(--cb);
+  box-shadow: 0 3px 0 var(--cs);
+  background: var(--cbg);
+  transition: transform .12s, box-shadow .12s;
+}
+.gc:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--cs); }
+
+.gc1 { --cbg:#EEE6FF; --cb:#D4C0FF; --cs:#C2ABFF; --ci:#7C5CBF; }
+.gc2 { --cbg:#D7F9EE; --cb:#A8EDD4; --cs:#7DDCB8; --ci:#0D9B65; }
+.gc3 { --cbg:#FFE9D4; --cb:#FFD0A8; --cs:#FFB870; --ci:#C06000; }
+.gc4 { --cbg:#FFE4EE; --cb:#FFC4D8; --cs:#FFA0C0; --ci:#B02060; }
+.gc5 { --cbg:#D6F0FF; --cb:#A8DCFF; --cs:#78C8FF; --ci:#0070C0; }
+.gc6 { --cbg:#FFF3D0; --cb:#FFE080; --cs:#FFD040; --ci:#9A6800; }
+
+.giw {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: rgba(255,255,255,0.6);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 1px;
+}
+.giw svg { width: 22px; height: 22px; }
+
+.gn { font-size: 11px; font-weight: 800; color: #2D2D2D; line-height: 1.3; }
+.gbest {
+  font-size: 9px; font-weight: 600; color: #888;
+  background: rgba(0,0,0,0.06);
+  padding: 2px 6px; border-radius: 6px;
+  display: inline-block; width: fit-content;
+}
+.gtag {
+  font-size: 8px; font-weight: 700;
+  padding: 2px 5px; border-radius: 5px;
+  display: inline-block; width: fit-content;
+}
+.t-new { background: #D6EEFF; color: #0070CC; }
+.t-hot { background: #FFE4CC; color: #CC5500; }
+.t-coming { background: #F0F0F0; color: #AAA; }
+
+.ndot {
+  position: absolute; top: 9px; right: 9px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #FF4B4B; border: 2px solid #fff;
+}
+
+.gbtn {
+  margin-top: 2px;
+  background: rgba(0,0,0,0.07);
+  border-radius: 8px; padding: 4px 8px;
+  font-size: 9px; font-weight: 800; color: #2D2D2D;
+  display: flex; align-items: center; gap: 3px;
+  width: fit-content;
+}
+
+/* ═══════════════════════════
+   SVG ICONS (inline reusable)
+═══════════════════════════ */
+
+/* ═══════════════════════════
+   PAGE 1 · 首页
+═══════════════════════════ */
+.hero {
+  background: #DDF4FF; padding: 13px 14px 14px;
+  position: relative; overflow: hidden;
+}
+.hero-deco {
+  position: absolute; border-radius: 50%;
+  background: rgba(255,255,255,0.28);
+}
+.mrow {
+  display: flex; align-items: flex-start;
+  gap: 10px; margin-bottom: 11px;
+  position: relative; z-index: 1;
+}
+.mwrap {
+  width: 56px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+}
+.mbody {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: #58CC02; border: 3px solid #fff;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.09);
+  display: flex; align-items: center; justify-content: center;
+  animation: mb 2.4s ease-in-out infinite;
+  position: relative; z-index: 1;
+}
+@keyframes mb {
+  0%,100% { transform: translateY(0); }
+  45%,55%  { transform: translateY(-6px); }
+  80%      { transform: translateY(1px); }
+}
+.mshad {
+  width: 30px; height: 6px; border-radius: 50%;
+  background: rgba(0,100,0,0.15); margin-top: 2px;
+  animation: ms 2.4s ease-in-out infinite;
+}
+@keyframes ms {
+  0%,100% { transform: scaleX(1); opacity: 0.15; }
+  50%      { transform: scaleX(0.6); opacity: 0.08; }
+}
+.bubble {
+  background: #fff; border-radius: 16px 16px 16px 4px;
+  padding: 9px 11px; flex: 1;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.05);
+}
+.bm { font-size: 12px; font-weight: 800; color: #1A1A1A; line-height: 1.4; }
+.bs { font-size: 10px; color: #AAA; margin-top: 2px; }
+
+.bigbtn {
+  background: #FF9600; border-radius: 15px;
+  padding: 12px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 3px 0 #C96800;
+  cursor: pointer; position: relative; z-index: 1;
+  transition: transform .1s, box-shadow .1s;
+}
+.bigbtn:active { transform: translateY(2px); box-shadow: 0 1px 0 #C96800; }
+.bbl { display: flex; flex-direction: column; gap: 2px; }
+.bbe { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; color: rgba(255,255,255,0.7); }
+.bbn { font-size: 14px; font-weight: 900; color: #fff; }
+.bbs { font-size: 9px; color: rgba(255,255,255,0.6); }
+.bplay {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  border: 2px solid rgba(255,255,255,0.45);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.parent-btn {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.9);
+  display: flex; align-items: center; justify-content: center;
+  position: absolute; top: 14px; right: 14px; z-index: 5;
+}
+
+/* course card */
+.cwrap { padding: 5px 13px 16px; }
+.ccard {
+  background: #1C1464; border-radius: 18px;
+  padding: 14px 15px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 3px 0 #0D0A3C;
+  position: relative; overflow: hidden; cursor: pointer;
+}
+.ccard::before {
+  content: '· · · · ·';
+  position: absolute; top: 7px; right: 14px;
+  font-size: 7px; color: rgba(255,255,255,0.15); letter-spacing: 5px;
+}
+.cico { flex-shrink: 0; position: relative; z-index: 1; }
+.ctxt { flex: 1; position: relative; z-index: 1; }
+.ce { font-size: 8px; font-weight: 800; color: #FFD93D; letter-spacing: 0.08em; margin-bottom: 2px; }
+.ct { font-size: 13px; font-weight: 900; color: #fff; line-height: 1.3; }
+.cs { font-size: 9px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.ccta {
+  background: #FFD93D; color: #3D2800;
+  font-size: 11px; font-weight: 900;
+  padding: 7px 10px; border-radius: 10px;
+  box-shadow: 0 2px 0 #C9A800;
+  flex-shrink: 0; position: relative; z-index: 1;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════
+   PAGE 2 · 任务页
+═══════════════════════════ */
+.tbar {
+  background: #fff; padding: 10px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1.5px solid #EEE9DF;
+}
+.ttitle { font-size: 16px; font-weight: 900; color: #1A1A1A; }
+.datepill {
+  font-size: 9px; color: #888; font-weight: 600;
+  background: #F4F2EC; padding: 3px 9px; border-radius: 10px;
+}
+
+.tscroll { padding: 10px 13px; display: flex; flex-direction: column; gap: 9px; }
+
+.streak-hero {
+  background: #1C1464; border-radius: 18px; padding: 14px 15px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 3px 0 #0D0A3C; position: relative; overflow: hidden;
+}
+.sh-glow {
+  position: absolute; top: -30px; left: -10px;
+  width: 110px; height: 110px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,150,0,0.3) 0%, transparent 70%);
+}
+.sh-ico { font-size: 34px; flex-shrink: 0; position: relative; z-index: 1; }
+.sh-txt { flex: 1; position: relative; z-index: 1; }
+.sh-lbl { font-size: 9px; color: rgba(255,255,255,0.5); margin-bottom: 2px; font-weight: 600; }
+.sh-days { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; }
+.sh-sub { font-size: 9px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.sh-right { position: relative; z-index: 1; text-align: right; }
+.sh-calbtn {
+  font-size: 9px; color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.1);
+  padding: 3px 8px; border-radius: 7px;
+  display: block; margin-bottom: 7px; cursor: pointer;
+  white-space: nowrap;
+}
+.sh-pts { font-size: 20px; font-weight: 900; color: #FFD93D; }
+.sh-ptslbl { font-size: 8px; color: rgba(255,255,255,0.4); }
+
+/* mini calendar */
+.cal {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; padding: 11px 13px;
+}
+.cal-top {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.cal-ttl { font-size: 11px; font-weight: 800; color: #1A1A1A; }
+.cal-more { font-size: 9px; font-weight: 700; color: #58CC02; }
+.cal-row { display: flex; gap: 3px; justify-content: space-between; }
+.cday { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+.cwd { font-size: 8px; color: #CCC; font-weight: 600; }
+.cdot {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800;
+}
+.cd-done { background: #58CC02; color: #fff; }
+.cd-today { background: #FF9600; color: #fff; }
+.cd-future { background: #F4F2EC; color: #CCC; }
+
+/* pts card */
+.ptscard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; padding: 11px 13px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.ptsl { display: flex; flex-direction: column; gap: 2px; }
+.ptslbl { font-size: 9px; color: #BBB; font-weight: 600; }
+.ptsval { font-size: 22px; font-weight: 900; color: #7C5CBF; }
+.ptssub { font-size: 9px; color: #999; }
+.ptsex {
+  font-size: 10px; font-weight: 800; color: #7C5CBF;
+  background: #EEE6FF; padding: 7px 11px; border-radius: 10px;
+  cursor: pointer;
+}
+
+.tsec-title { font-size: 11px; font-weight: 800; color: #666; letter-spacing: 0.04em; }
+
+.tcard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; overflow: hidden;
+}
+.ti {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 13px; border-bottom: 1px solid #F5F2EB;
+}
+.ti:last-child { border-bottom: none; }
+.tchk {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid #D4D0C8; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: transparent;
+}
+.tchk.done { background: #58CC02; border-color: #58CC02; color: #fff; }
+.tinf { flex: 1; }
+.tn { font-size: 11px; font-weight: 700; color: #1A1A1A; }
+.td { font-size: 9px; color: #BBB; margin-top: 1px; }
+.tpts {
+  font-size: 10px; font-weight: 800; color: #7C5CBF;
+  background: #EEE6FF; padding: 3px 7px; border-radius: 7px; flex-shrink: 0;
+}
+.tpts.done { color: #BBB; background: #F4F2EC; text-decoration: line-through; }
+.tbonus {
+  background: #F9F7F2; padding: 9px 13px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px dashed #E8E4DC;
+}
+.tbont { font-size: 10px; color: #888; }
+.tbonv { font-size: 11px; font-weight: 800; color: #7C5CBF; }
+
+.chcard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; overflow: hidden;
+}
+.chh {
+  padding: 10px 13px 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid #F5F2EB;
+}
+.cht { font-size: 11px; font-weight: 800; color: #1A1A1A; }
+.chp { font-size: 9px; color: #888; font-weight: 600; }
+.chi {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 13px; border-bottom: 1px solid #F5F2EB;
+}
+.chi:last-child { border-bottom: none; }
+.chico { font-size: 14px; flex-shrink: 0; }
+.chin { flex: 1; }
+.chn { font-size: 10px; font-weight: 700; color: #1A1A1A; }
+.chd { font-size: 9px; color: #BBB; margin-top: 1px; }
+.chrew {
+  font-size: 9px; font-weight: 800; color: #C06000;
+  background: #FFE9D4; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;
+}
+.chdone { font-size: 14px; }
+
+/* ═══════════════════════════
+   PAGE 3 · 我的
+═══════════════════════════ */
+.phero {
+  background: #fff; padding: 14px 14px 13px;
+  border-bottom: 1.5px solid #EEE9DF;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.avwrap { position: relative; }
+.av {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: linear-gradient(135deg, #C8F0DC 0%, #9FE1CB 100%);
+  border: 3px solid #58CC02;
+  display: flex; align-items: center; justify-content: center;
+}
+.avedit {
+  position: absolute; bottom: 0; right: -2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #7C5CBF; border: 2px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #fff; cursor: pointer;
+}
+.avpts {
+  position: absolute; top: -4px; right: -8px;
+  background: #FFD93D; border: 2px solid #fff;
+  border-radius: 10px; padding: 1px 5px;
+  font-size: 8px; font-weight: 800; color: #6A4400;
+}
+.pname { font-size: 15px; font-weight: 900; color: #1A1A1A; }
+.pid { font-size: 9px; color: #CCC; font-weight: 600; }
+.pstats {
+  display: flex; background: #F7F5F0; border-radius: 12px;
+  overflow: hidden; width: 100%;
+}
+.pst {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; padding: 8px 0;
+  border-right: 1px solid #EEE9DF;
+}
+.pst:last-child { border-right: none; }
+.psv { font-size: 16px; font-weight: 900; color: #7C5CBF; }
+.psv.fire { color: #C06000; }
+.psl { font-size: 8px; color: #AAA; font-weight: 600; }
+
+.pscroll { padding: 10px 13px; display: flex; flex-direction: column; gap: 8px; }
+
+.reccard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; overflow: hidden;
+}
+.rech {
+  padding: 10px 13px 8px;
+  display: flex; justify-content: space-between;
+  border-bottom: 1px solid #F5F2EB;
+}
+.rect { font-size: 11px; font-weight: 800; color: #1A1A1A; }
+.reca { font-size: 9px; font-weight: 700; color: #58CC02; }
+.reci {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 13px; border-bottom: 1px solid #F5F2EB;
+}
+.reci:last-child { border-bottom: none; }
+.ricico {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.ri1 { background: #EEE6FF; }
+.ri2 { background: #D7F9EE; }
+.ri3 { background: #FFE9D4; }
+.rii { flex: 1; }
+.rin { font-size: 10px; font-weight: 700; color: #1A1A1A; }
+.rip { font-size: 9px; color: #CCC; margin-top: 1px; }
+.rib { text-align: right; }
+.ribv { font-size: 13px; font-weight: 900; color: #7C5CBF; }
+.ribl { font-size: 8px; color: #CCC; margin-top: 1px; }
+
+.badgecard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; padding: 11px 13px;
+}
+.badgeh {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.badget { font-size: 11px; font-weight: 800; color: #1A1A1A; }
+.badgec { font-size: 9px; color: #888; font-weight: 600; }
+.badges { display: flex; gap: 5px; }
+.badge-item { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+.badge-ico {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
+.bi-e { background: #FFF3D0; border: 2px solid #FFD040; }
+.bi-l { background: #F4F2EC; filter: grayscale(1); opacity: 0.4; }
+.badge-name { font-size: 8px; color: #AAA; font-weight: 600; text-align: center; line-height: 1.3; }
+
+.setcard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; overflow: hidden;
+}
+.si {
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 13px; border-bottom: 1px solid #F5F2EB;
+  cursor: pointer;
+}
+.si:last-child { border-bottom: none; }
+.sico { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+.sn { font-size: 11px; color: #1A1A1A; flex: 1; font-weight: 600; }
+.sv { font-size: 10px; color: #AAA; margin-right: 3px; }
+.sa { font-size: 13px; color: #CCC; }
+.si.muted .sn { color: #CCC; }
+.si.muted .sico { opacity: 0.35; }
+
+/* ═══════════════════════════
+   PAGE 4 · 家长报告
+═══════════════════════════ */
+.prheader {
+  background: #fff; padding: 12px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1.5px solid #EEE9DF;
+}
+.prclose { font-size: 18px; color: #CCC; cursor: pointer; }
+.prtitle { font-size: 13px; font-weight: 800; color: #1A1A1A; }
+.prweek {
+  font-size: 9px; color: #888; font-weight: 600;
+  background: #F4F2EC; padding: 3px 8px; border-radius: 9px;
+}
+
+.prbody { padding: 10px 13px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+
+.child-row {
+  display: flex; align-items: center; gap: 9px;
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 14px; padding: 9px 12px;
+}
+.chav {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: #D7F9EE; border: 1.5px solid #9FE1CB;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.chname { font-size: 12px; font-weight: 800; color: #1A1A1A; }
+.chstats { font-size: 10px; color: #AAA; margin-top: 2px; }
+
+.abcard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 16px; padding: 11px 13px;
+}
+.abh {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 8px;
+}
+.abn { font-size: 12px; font-weight: 800; color: #1A1A1A; }
+.abg { font-size: 9px; color: #AAA; margin-top: 2px; }
+.grade { font-size: 20px; font-weight: 900; }
+.gp { color: #7C5CBF; }
+.gt { color: #0D9B65; }
+
+.mbars {
+  display: flex; gap: 3px; align-items: flex-end;
+  height: 28px; margin-bottom: 6px;
+}
+.mbar { width: 14px; border-radius: 3px 3px 0 0; }
+
+.abinsight { font-size: 10px; color: #888; line-height: 1.5; }
+.ablocked {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid #F5F2EB;
+}
+.ablocktxt { font-size: 9px; color: #CCC; }
+
+.cvcard {
+  background: #F9F7F2; border: 1.5px dashed #D8D4CC;
+  border-radius: 16px; padding: 12px 13px;
+}
+.cvtitle { font-size: 12px; font-weight: 800; color: #1A1A1A; }
+.cvsub { font-size: 10px; color: #AAA; margin-top: 3px; line-height: 1.5; }
+.cvbtn {
+  margin-top: 10px; background: #7C5CBF; color: #fff;
+  font-size: 11px; font-weight: 800;
+  padding: 9px 0; border-radius: 10px;
+  text-align: center; cursor: pointer;
+  box-shadow: 0 3px 0 #5A3A9A;
+}
+
+/* ═══════════════════════════
+   PAGE 5 · 时长解锁弹窗
+═══════════════════════════ */
+.overlay-screen {
+  background: #FFFDF8;
+  display: flex; flex-direction: column;
+  overflow: hidden; flex: 1;
+  position: relative;
+}
+.bg-dimmed {
+  flex: 1; background: #FFFDF8;
+  opacity: 0.4; overflow: hidden;
+}
+.sheet-overlay {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: rgba(20,18,14,0.5);
+  top: 0; display: flex; flex-direction: column;
+  justify-content: flex-end;
+}
+.sheet {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 18px 18px 28px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 11px;
+}
+.shdl {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: #E8E4DC; margin-bottom: 3px;
+}
+.shico { font-size: 36px; line-height: 1; }
+.sht { font-size: 15px; font-weight: 900; color: #1A1A1A; text-align: center; }
+.shs { font-size: 11px; color: #AAA; text-align: center; line-height: 1.6; }
+
+.vbox {
+  width: 100%; background: #F7F5F0;
+  border-radius: 14px; padding: 13px 15px; text-align: center;
+}
+.vq { font-size: 10px; color: #AAA; font-weight: 600; margin-bottom: 6px; }
+.vcn {
+  font-size: 22px; font-weight: 900; color: #1A1A1A;
+  letter-spacing: 0.04em; margin-bottom: 10px;
+}
+.vcn-sub { font-size: 9px; color: #CCC; margin-bottom: 8px; margin-top: -6px; }
+.vinput { display: flex; justify-content: center; gap: 7px; }
+.vdig {
+  width: 36px; height: 42px; border-radius: 10px;
+  border: 2px solid #E0DCD4; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 900; color: #7C5CBF;
+}
+.vdig.filled { border-color: #A78BFA; background: #F0EEFF; }
+.vdig.cursor { border-color: #7C5CBF; }
+
+.unlockbtn {
+  width: 100%; background: #58CC02; color: #fff;
+  font-size: 13px; font-weight: 900;
+  padding: 13px 0; border-radius: 14px;
+  text-align: center; cursor: pointer;
+  box-shadow: 0 4px 0 #3A9900;
+  opacity: 0.45;
+}
+.peekrow {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; color: #888; cursor: pointer;
+}
+.peekarr { font-size: 12px; color: #58CC02; font-weight: 700; }
+
+/* ═══════════════════════════
+   PAGE 6 · 游戏成绩页
+═══════════════════════════ */
+.score-header {
+  background: #EEE6FF;
+  padding: 14px 15px 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.sgname { font-size: 11px; font-weight: 700; color: #7C5CBF; }
+.sgresult { font-size: 12px; font-weight: 700; color: #1A1A1A; }
+.sgbig { font-size: 52px; font-weight: 900; color: #7C5CBF; line-height: 1; }
+.sgunit { font-size: 14px; color: #AAA; margin-top: 1px; }
+.sgnew {
+  background: #58CC02; color: #fff;
+  font-size: 10px; font-weight: 800;
+  padding: 3px 10px; border-radius: 20px;
+  box-shadow: 0 2px 0 #3A9900;
+}
+
+.sbody { padding: 0 13px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.scmp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.scmpcard {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 14px; padding: 10px 12px; text-align: center;
+}
+.scmpl { font-size: 9px; color: #BBB; font-weight: 600; margin-bottom: 4px; }
+.scmpv { font-size: 16px; font-weight: 900; color: #1A1A1A; }
+.scmpv.hi { color: #7C5CBF; }
+.scmps { font-size: 9px; color: #AAA; margin-top: 2px; }
+.scmps.win { color: #58CC02; font-weight: 700; }
+
+.abilpeek {
+  background: #fff; border: 1.5px solid #EEE9DF;
+  border-radius: 14px; padding: 11px 13px;
+}
+.apt { font-size: 11px; font-weight: 800; color: #1A1A1A; margin-bottom: 8px; }
+.apitems { display: flex; flex-direction: column; gap: 6px; }
+.apitem { display: flex; align-items: center; gap: 8px; }
+.apdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.apname { font-size: 10px; color: #555; font-weight: 600; flex: 1; }
+.apbar { width: 80px; height: 6px; background: #F4F2EC; border-radius: 3px; }
+.apfill { height: 6px; border-radius: 3px; }
+
+.sharebox {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sharehint { font-size: 10px; color: #BBB; text-align: center; font-weight: 600; }
+.sharebtn {
+  background: #fff; border: 2px solid #D4C0FF;
+  border-radius: 14px; padding: 11px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; box-shadow: 0 3px 0 #D4C0FF;
+}
+.sbico { font-size: 16px; }
+.sbtxt { font-size: 12px; font-weight: 800; color: #7C5CBF; }
+.sbsub { font-size: 9px; color: #AAA; }
+
+.replaybtn {
+  background: #FF9600; color: #fff;
+  font-size: 13px; font-weight: 900;
+  padding: 13px 0; border-radius: 14px;
+  text-align: center; cursor: pointer;
+  box-shadow: 0 4px 0 #C96800;
+}
+
+.sp { height: 16px; }
+</style>
+</head>
+<body>
+
+<span class="page-title">完整页面 · 儿童游戏平台</span>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- ROW 1: 首页 + 任务页 + 我的                  -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="row">
+
+  <!-- ① 首页 -->
+  <div class="col">
+    <span class="col-label">① 首页</span>
+    <div class="phone">
+      <div class="di"></div>
+      <div class="screen">
+        <div class="scroll-body">
+
+          <div class="hero">
+            <div class="hero-deco" style="width:90px;height:90px;top:-35px;right:-20px;"></div>
+            <div class="hero-deco" style="width:55px;height:55px;bottom:-20px;left:20px;"></div>
+            <!-- 家长图标 -->
+            <div class="parent-btn">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round">
+                <circle cx="8" cy="5.5" r="2.5"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+              </svg>
+            </div>
+            <div class="mrow">
+              <div class="mwrap">
+                <div class="mbody">
+                  <svg width="34" height="34" viewBox="0 0 36 36" fill="none">
+                    <circle cx="18" cy="18" r="17" fill="#58CC02"/>
+                    <ellipse cx="13" cy="16" rx="2.8" ry="3.2" fill="#fff"/>
+                    <ellipse cx="23" cy="16" rx="2.8" ry="3.2" fill="#fff"/>
+                    <circle cx="13.5" cy="16.5" r="1.7" fill="#1A1A1A"/>
+                    <circle cx="23.5" cy="16.5" r="1.7" fill="#1A1A1A"/>
+                    <circle cx="14" cy="15.5" r="0.6" fill="#fff"/>
+                    <circle cx="24" cy="15.5" r="0.6" fill="#fff"/>
+                    <path d="M12 23 Q18 27 24 23" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                    <ellipse cx="10" cy="21" rx="2.8" ry="1.8" fill="#FF6B6B" opacity="0.3"/>
+                    <ellipse cx="26" cy="21" rx="2.8" ry="1.8" fill="#FF6B6B" opacity="0.3"/>
+                  </svg>
+                </div>
+                <div class="mshad"></div>
+              </div>
+              <div class="bubble">
+                <div class="bm">连续5天了，厉害！🎉</div>
+                <div class="bs">继续你的口算挑战吧～</div>
+              </div>
+            </div>
+            <div class="bigbtn">
+              <div class="bbl">
+                <span class="bbe">继续上次</span>
+                <span class="bbn">⚡ 口算跑酷</span>
+                <span class="bbs">最佳 1340m · 冲破 1500m？</span>
+              </div>
+              <div class="bplay">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="white"><polygon points="2,1 13,7 2,13"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- 我玩过的 -->
+          <div class="sec-head">
+            <div class="sec-dot" style="background:#A78BFA;"></div>
+            <span class="sec-title">我玩过的</span>
+          </div>
+          <div class="ggrid">
+            <div class="gc gc1">
+              <div class="giw">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <path d="M19 4L10 18h7l-4 10 13-16h-8l3-8z" fill="#7C5CBF" stroke-linejoin="round"/>
+                  <text x="4" y="10" font-size="7" font-weight="900" fill="#B09DE0">3</text>
+                  <text x="23" y="27" font-size="6" font-weight="900" fill="#B09DE0">7</text>
+                </svg>
+              </div>
+              <div class="gn">口算跑酷</div>
+              <div class="gbest">最佳 1340m</div>
+              <div class="gbtn">▶ 继续</div>
+            </div>
+            <div class="gc gc2">
+              <div class="giw">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <rect x="4" y="4" width="7" height="7" rx="2" fill="#0D9B65"/>
+                  <rect x="13" y="4" width="7" height="7" rx="2" fill="#A8EDD4"/>
+                  <rect x="22" y="4" width="7" height="7" rx="2" fill="#0D9B65"/>
+                  <rect x="4" y="13" width="7" height="7" rx="2" fill="#A8EDD4"/>
+                  <rect x="13" y="13" width="7" height="7" rx="2" fill="#0D9B65"/>
+                  <rect x="22" y="13" width="7" height="7" rx="2" fill="#A8EDD4"/>
+                  <rect x="4" y="22" width="7" height="7" rx="2" fill="#0D9B65"/>
+                  <rect x="13" y="22" width="7" height="7" rx="2" fill="#A8EDD4"/>
+                  <rect x="22" y="22" width="7" height="7" rx="2" fill="#0D9B65"/>
+                  <text x="15.5" y="21" font-size="9" font-weight="900" fill="#fff" text-anchor="middle">4</text>
+                </svg>
+              </div>
+              <div class="gn">聪明格</div>
+              <div class="gbest">最佳 第18关</div>
+              <div class="gbtn">▶ 继续</div>
+            </div>
+          </div>
+
+          <!-- 推荐探索 -->
+          <div class="sec-head">
+            <div class="sec-dot" style="background:#FFB020;"></div>
+            <span class="sec-title">推荐探索</span>
+          </div>
+          <div class="ggrid">
+            <div class="gc gc3">
+              <div class="ndot"></div>
+              <div class="giw">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <path d="M13 12 L10 22 Q10 28 16 28 Q22 28 22 22 L19 12Z" fill="#FFB870" stroke="#C06000" stroke-width="1.2" stroke-linejoin="round"/>
+                  <rect x="12" y="7" width="8" height="6" rx="2" fill="#FFD4A8" stroke="#C06000" stroke-width="1.2"/>
+                  <rect x="13.5" y="4" width="5" height="4" rx="1.5" fill="#C06000"/>
+                  <circle cx="13" cy="21" r="2" fill="rgba(255,255,255,0.55)"/>
+                  <circle cx="18" cy="18" r="1.5" fill="rgba(255,255,255,0.45)"/>
+                  <text x="16" y="26" font-size="8" font-weight="900" fill="#fff" text-anchor="middle">?</text>
+                </svg>
+              </div>
+              <div class="gn">魔法药水猜猜</div>
+              <span class="gtag t-new">✨ 上新</span>
+              <div class="gbtn">▶ 试试</div>
+            </div>
+            <div class="gc gc4">
+              <div class="giw">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <rect x="6" y="10" width="18" height="13" rx="3" fill="#FFC4D8" transform="rotate(-8 6 10)"/>
+                  <rect x="7" y="9" width="18" height="13" rx="3" fill="#FFE4EE" stroke="#FFA0C0" stroke-width="1" transform="rotate(-3 7 9)"/>
+                  <rect x="7" y="9" width="18" height="13" rx="3" fill="#fff" stroke="#FFC4D8" stroke-width="1.2"/>
+                  <text x="16" y="19.5" font-size="10" font-weight="900" fill="#B02060" text-anchor="middle">A</text>
+                </svg>
+              </div>
+              <div class="gn">单词卡牌</div>
+              <span class="gtag t-hot">🔥 热门</span>
+              <div class="gbtn">▶ 试试</div>
+            </div>
+            <div class="gc gc5">
+              <div class="giw">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <!-- 连连看：简化格子+连线 -->
+                  <rect x="3" y="3" width="10" height="10" rx="2.5" fill="#A8DCFF" stroke="#0070C0" stroke-width="1"/>
+                  <rect x="19" y="3" width="10" height="10" rx="2.5" fill="#0070C0"/>
+                  <rect x="3" y="19" width="10" height="10" rx="2.5" fill="#0070C0"/>
+                  <rect x="19" y="19" width="10" height="10" rx="2.5" fill="#A8DCFF" stroke="#0070C0" stroke-width="1"/>
+                  <text x="8" y="11" font-size="7" font-weight="900" fill="#0070C0" text-anchor="middle">1</text>
+                  <text x="24" y="11" font-size="7" font-weight="900" fill="#fff" text-anchor="middle">2</text>
+                  <text x="8" y="27" font-size="7" font-weight="900" fill="#fff" text-anchor="middle">3</text>
+                  <text x="24" y="27" font-size="7" font-weight="900" fill="#0070C0" text-anchor="middle">4</text>
+                  <!-- 连线 -->
+                  <path d="M13 8 L19 8" stroke="#0070C0" stroke-width="1.5" stroke-dasharray="2 1.5"/>
+                  <path d="M8 13 L8 19" stroke="#0070C0" stroke-width="1.5" stroke-dasharray="2 1.5"/>
+                </svg>
+              </div>
+              <div class="gn">数字连连看</div>
+              <span class="gtag t-hot">🔥 热门</span>
+              <div class="gbtn">▶ 试试</div>
+            </div>
+            <div class="gc gc6">
+              <div class="giw">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <rect x="6" y="8" width="20" height="17" rx="2" fill="#FFE080"/>
+                  <rect x="4" y="7" width="4" height="19" rx="2" fill="#C8A000"/>
+                  <rect x="24" y="7" width="4" height="19" rx="2" fill="#C8A000"/>
+                  <rect x="9" y="12" width="14" height="1.5" rx="1" fill="#9A6800" opacity="0.45"/>
+                  <rect x="9" y="16" width="10" height="1.5" rx="1" fill="#9A6800" opacity="0.45"/>
+                  <text x="16" y="22.5" font-size="9" font-weight="900" fill="#9A6800" text-anchor="middle">文</text>
+                </svg>
+              </div>
+              <div class="gn">咬文嚼字</div>
+              <span class="gtag t-coming">即将上线</span>
+              <div class="gbtn" style="color:#CCC;">· · ·</div>
+            </div>
+          </div>
+
+          <!-- 课程卡 -->
+          <div class="cwrap">
+            <div class="ccard">
+              <div class="cico">
+                <svg width="38" height="38" viewBox="0 0 40 40" fill="none">
+                  <circle cx="20" cy="20" r="18" fill="#2D1B8E" opacity="0.5"/>
+                  <path d="M20 8 L22.5 16 L31 16 L24.5 21 L27 29 L20 24 L13 29 L15.5 21 L9 16 L17.5 16Z" fill="#FFD93D"/>
+                </svg>
+              </div>
+              <div class="ctxt">
+                <div class="ce">下一个挑战</div>
+                <div class="ct">解锁能力训练营</div>
+                <div class="cs">看看我能练到几级？</div>
+              </div>
+              <div class="ccta">去看看</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="bnav">
+          <div class="ni on">
+            <div class="nb">
+              <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                <path d="M6 13 Q6 8 16 8 Q26 8 26 13 L24 22 Q23 26 20 26 Q18 26 17 24 L15 24 Q14 26 12 26 Q9 26 8 22Z" fill="#58CC02" stroke="#3A9900" stroke-width="0.8"/>
+                <rect x="9" y="15" width="5" height="2" rx="1" fill="#fff"/>
+                <rect x="10.5" y="13.5" width="2" height="5" rx="1" fill="#fff"/>
+                <circle cx="21.5" cy="14.5" r="1.8" fill="#fff" opacity="0.9"/>
+                <circle cx="18.5" cy="17" r="1.8" fill="#fff" opacity="0.7"/>
+              </svg>
+            </div>
+            <span>游戏</span>
+          </div>
+          <div class="ni">
+            <div class="nb">
+              <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                <path d="M13 4 L16 10 L19 4" stroke="#C8C4BC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <circle cx="16" cy="20" r="9" fill="#C8C4BC"/>
+                <text x="16" y="24" font-size="10" font-weight="900" fill="#fff" text-anchor="middle">★</text>
+              </svg>
+              <div class="nbadge"></div>
+            </div>
+            <span>任务</span>
+          </div>
+          <div class="ni">
+            <div class="nb">
+              <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="13" r="6" fill="#C8C4BC"/>
+                <path d="M6 28 Q6 20 16 20 Q26 20 26 28" fill="#C8C4BC" opacity="0.6"/>
+              </svg>
+            </div>
+            <span>我的</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 任务页 -->
+  <div class="col">
+    <span class="col-label">② 任务页</span>
+    <div class="phone">
+      <div class="di"></div>
+      <div class="screen">
+        <div class="tbar">
+          <span class="ttitle">任务</span>
+          <span class="datepill">4月9日 · 周三</span>
+        </div>
+        <div class="scroll-body">
+          <div class="tscroll">
+
+            <div class="streak-hero">
+              <div class="sh-glow"></div>
+              <div class="sh-ico">🔥</div>
+              <div class="sh-txt">
+                <div class="sh-lbl">连续打卡</div>
+                <div class="sh-days">5 天</div>
+                <div class="sh-sub">再坚持 2 天解锁限定头像</div>
+              </div>
+              <div class="sh-right">
+                <span class="sh-calbtn">查看日历 ›</span>
+                <div class="sh-pts">240</div>
+                <div class="sh-ptslbl">累计积分</div>
+              </div>
+            </div>
+
+            <div class="cal">
+              <div class="cal-top">
+                <span class="cal-ttl">本周打卡</span>
+                <span class="cal-more">完整记录 ›</span>
+              </div>
+              <div class="cal-row">
+                <div class="cday"><span class="cwd">一</span><div class="cdot cd-done">✓</div></div>
+                <div class="cday"><span class="cwd">二</span><div class="cdot cd-done">✓</div></div>
+                <div class="cday"><span class="cwd">三</span><div class="cdot cd-done">✓</div></div>
+                <div class="cday"><span class="cwd">四</span><div class="cdot cd-done">✓</div></div>
+                <div class="cday"><span class="cwd">五</span><div class="cdot cd-today" style="font-size:8px;">今</div></div>
+                <div class="cday"><span class="cwd">六</span><div class="cdot cd-future">·</div></div>
+                <div class="cday"><span class="cwd">日</span><div class="cdot cd-future">·</div></div>
+              </div>
+            </div>
+
+            <div class="ptscard">
+              <div class="ptsl">
+                <div class="ptslbl">我的积分</div>
+                <div class="ptsval">240</div>
+                <div class="ptssub">可兑换绿豆限定头像</div>
+              </div>
+              <div class="ptsex">去兑换 ›</div>
+            </div>
+
+            <div class="tsec-title">今日任务</div>
+            <div class="tcard">
+              <div class="ti">
+                <div class="tchk done">✓</div>
+                <div class="tinf">
+                  <div class="tn">口算跑酷跑 1000m</div>
+                  <div class="td">速度挑战 · 已完成</div>
+                </div>
+                <span class="tpts done">+20</span>
+              </div>
+              <div class="ti">
+                <div class="tchk"></div>
+                <div class="tinf">
+                  <div class="tn">聪明格无错误通关</div>
+                  <div class="td">逻辑挑战 · 0次失误才算</div>
+                </div>
+                <span class="tpts">+30</span>
+              </div>
+              <div class="ti">
+                <div class="tchk"></div>
+                <div class="tinf">
+                  <div class="tn">试玩魔法药水猜猜</div>
+                  <div class="td">新游戏探索 · 玩一局即可</div>
+                </div>
+                <span class="tpts">+15</span>
+              </div>
+              <div class="tbonus">
+                <span class="tbont">全部完成额外奖励</span>
+                <span class="tbonv">+50分 🎉</span>
+              </div>
+            </div>
+
+            <div class="tsec-title">本周挑战</div>
+            <div class="chcard">
+              <div class="chh">
+                <span class="cht">本周徽章挑战</span>
+                <span class="chp">已完成 1/3</span>
+              </div>
+              <div class="chi">
+                <span class="chico">📅</span>
+                <div class="chin">
+                  <div class="chn">连续7天打卡</div>
+                  <div class="chd">已连续 5 天，还差 2 天</div>
+                </div>
+                <span class="chrew">限定头像</span>
+              </div>
+              <div class="chi">
+                <span class="chico">🚀</span>
+                <div class="chin">
+                  <div class="chn">口算跑超 1500m</div>
+                  <div class="chd">当前最佳 1340m</div>
+                </div>
+                <span class="chrew">+80分</span>
+              </div>
+              <div class="chi">
+                <span class="chico">🎮</span>
+                <div class="chin">
+                  <div class="chn">分享给好友挑战</div>
+                  <div class="chd">已完成</div>
+                </div>
+                <span class="chdone">✅</span>
+              </div>
+            </div>
+            <div class="sp"></div>
+          </div>
+        </div>
+        <div class="bnav">
+          <div class="ni"><div class="nb"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><path d="M6 13 Q6 8 16 8 Q26 8 26 13 L24 22 Q23 26 20 26 Q18 26 17 24 L15 24 Q14 26 12 26 Q9 26 8 22Z" fill="#C8C4BC"/><rect x="9" y="15" width="5" height="2" rx="1" fill="#fff"/><rect x="10.5" y="13.5" width="2" height="5" rx="1" fill="#fff"/></svg></div><span>游戏</span></div>
+          <div class="ni on"><div class="nb"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><path d="M13 4 L16 10 L19 4" stroke="#58CC02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="16" cy="20" r="9" fill="#58CC02"/><text x="16" y="24" font-size="10" font-weight="900" fill="#fff" text-anchor="middle">★</text></svg></div><span>任务</span></div>
+          <div class="ni"><div class="nb"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="13" r="6" fill="#C8C4BC"/><path d="M6 28 Q6 20 16 20 Q26 20 26 28" fill="#C8C4BC" opacity="0.6"/></svg></div><span>我的</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 我的 -->
+  <div class="col">
+    <span class="col-label">③ 我的</span>
+    <div class="phone">
+      <div class="di"></div>
+      <div class="screen">
+        <div class="phero">
+          <div class="avwrap">
+            <div class="av">
+              <svg width="34" height="34" viewBox="0 0 36 36" fill="none">
+                <circle cx="18" cy="18" r="17" fill="#58CC02"/>
+                <ellipse cx="13" cy="16" rx="2.8" ry="3.2" fill="#fff"/>
+                <ellipse cx="23" cy="16" rx="2.8" ry="3.2" fill="#fff"/>
+                <circle cx="13.5" cy="16.5" r="1.7" fill="#1A1A1A"/>
+                <circle cx="23.5" cy="16.5" r="1.7" fill="#1A1A1A"/>
+                <path d="M12 23 Q18 27 24 23" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <ellipse cx="10" cy="21" rx="2.8" ry="1.8" fill="#FF6B6B" opacity="0.3"/>
+                <ellipse cx="26" cy="21" rx="2.8" ry="1.8" fill="#FF6B6B" opacity="0.3"/>
+              </svg>
+            </div>
+            <div class="avedit">✎</div>
+            <div class="avpts">240pt</div>
+          </div>
+          <div class="pname">小明</div>
+          <div class="pid">ID · 2024001</div>
+          <div class="pstats">
+            <div class="pst"><div class="psv">240</div><div class="psl">积分</div></div>
+            <div class="pst"><div class="psv fire">🔥5</div><div class="psl">连胜天</div></div>
+            <div class="pst"><div class="psv">3</div><div class="psl">游戏数</div></div>
+          </div>
+        </div>
+        <div class="scroll-body">
+          <div class="pscroll">
+            <div class="reccard">
+              <div class="rech"><span class="rect">游戏记录</span><span class="reca">全部 ›</span></div>
+              <div class="reci">
+                <div class="ricico ri1"><svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M19 4L10 18h7l-4 10 13-16h-8l3-8z" fill="#7C5CBF"/></svg></div>
+                <div class="rii"><div class="rin">口算跑酷</div><div class="rip">已玩 23 局</div></div>
+                <div class="rib"><div class="ribv">1340m</div><div class="ribl">历史最佳</div></div>
+              </div>
+              <div class="reci">
+                <div class="ricico ri2"><svg width="16" height="16" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="7" height="7" rx="2" fill="#0D9B65"/><rect x="13" y="4" width="7" height="7" rx="2" fill="#A8EDD4"/><rect x="22" y="4" width="7" height="7" rx="2" fill="#0D9B65"/><rect x="4" y="13" width="7" height="7" rx="2" fill="#A8EDD4"/><rect x="13" y="13" width="7" height="7" rx="2" fill="#0D9B65"/><rect x="22" y="13" width="7" height="7" rx="2" fill="#A8EDD4"/><rect x="4" y="22" width="7" height="7" rx="2" fill="#0D9B65"/><rect x="13" y="22" width="7" height="7" rx="2" fill="#A8EDD4"/><rect x="22" y="22" width="7" height="7" rx="2" fill="#0D9B65"/></svg></div>
+                <div class="rii"><div class="rin">聪明格</div><div class="rip">已玩 11 局</div></div>
+                <div class="rib"><div class="ribv">第18关</div><div class="ribl">历史最佳</div></div>
+              </div>
+              <div class="reci">
+                <div class="ricico ri3"><svg width="16" height="16" viewBox="0 0 32 32" fill="none"><path d="M13 12 L10 22 Q10 28 16 28 Q22 28 22 22 L19 12Z" fill="#FFB870"/><rect x="12" y="7" width="8" height="6" rx="2" fill="#FFD4A8"/><rect x="13.5" y="4" width="5" height="4" rx="1.5" fill="#C06000"/><text x="16" y="26" font-size="8" font-weight="900" fill="#fff" text-anchor="middle">?</text></svg></div>
+                <div class="rii"><div class="rin">魔法药水猜猜</div><div class="rip">已玩 2 局</div></div>
+                <div class="rib"><div class="ribv">82%</div><div class="ribl">正确率</div></div>
+              </div>
+            </div>
+            <div class="badgecard">
+              <div class="badgeh"><span class="badget">我的徽章</span><span class="badgec">已获得 3/12</span></div>
+              <div class="badges">
+                <div class="badge-item"><div class="badge-ico bi-e">🔥</div><div class="badge-name">连续5天</div></div>
+                <div class="badge-item"><div class="badge-ico bi-e">🚀</div><div class="badge-name">首次破千</div></div>
+                <div class="badge-item"><div class="badge-ico bi-e">🎮</div><div class="badge-name">分享达人</div></div>
+                <div class="badge-item"><div class="badge-ico bi-l">⭐</div><div class="badge-name">连续7天</div></div>
+                <div class="badge-item"><div class="badge-ico bi-l">🏆</div><div class="badge-name">全游戏</div></div>
+                <div class="badge-item"><div class="badge-ico bi-l">💎</div><div class="badge-name">无错通关</div></div>
+              </div>
+            </div>
+            <div class="setcard">
+              <div class="si"><span class="sico">✏️</span><span class="sn">修改昵称</span><span class="sa">›</span></div>
+              <div class="si muted"><span class="sico">⏱️</span><span class="sn">游戏时长设置</span><span class="sv">需家长验证</span><span class="sa">›</span></div>
+            </div>
+            <div class="sp"></div>
+          </div>
+        </div>
+        <div class="bnav">
+          <div class="ni"><div class="nb"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><path d="M6 13 Q6 8 16 8 Q26 8 26 13 L24 22 Q23 26 20 26 Q18 26 17 24 L15 24 Q14 26 12 26 Q9 26 8 22Z" fill="#C8C4BC"/></svg></div><span>游戏</span></div>
+          <div class="ni"><div class="nb"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><path d="M13 4 L16 10 L19 4" stroke="#C8C4BC" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="16" cy="20" r="9" fill="#C8C4BC"/></svg></div><span>任务</span></div>
+          <div class="ni on"><div class="nb"><svg width="20" height="20" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="13" r="6" fill="#58CC02"/><path d="M6 28 Q6 20 16 20 Q26 20 26 28" fill="#58CC02" opacity="0.7"/></svg></div><span>我的</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- ROW 2: 家长报告 + 时长解锁 + 成绩页           -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="row">
+
+  <!-- ④ 家长报告 -->
+  <div class="col">
+    <span class="col-label">④ 家长报告页</span>
+    <div class="phone">
+      <div class="di"></div>
+      <div class="screen">
+        <div class="prheader">
+          <span class="prclose">✕</span>
+          <span class="prtitle">孩子的能力报告</span>
+          <span class="prweek">本周</span>
+        </div>
+        <div class="scroll-body">
+          <div class="prbody">
+
+            <div class="child-row">
+              <div class="chav">🐣</div>
+              <div>
+                <div class="chname">小明</div>
+                <div class="chstats">本周连续 5 天 · 挑战了 3 款游戏</div>
+              </div>
+            </div>
+
+            <div class="abcard">
+              <div class="abh">
+                <div><div class="abn">数感</div><div class="abg">口算跑酷 · 聪明格</div></div>
+                <span class="grade gp">B+</span>
+              </div>
+              <div class="mbars">
+                <div class="mbar" style="height:10px;background:#CECBF6;"></div>
+                <div class="mbar" style="height:16px;background:#CECBF6;"></div>
+                <div class="mbar" style="height:22px;background:#7C5CBF;"></div>
+                <div class="mbar" style="height:26px;background:#7C5CBF;"></div>
+                <div class="mbar" style="height:20px;background:#7C5CBF;"></div>
+              </div>
+              <div class="abinsight">口算反应速度较上周提升 12%，连续答对最长纪录 8 题</div>
+              <div class="ablocked">
+                <span style="font-size:11px;">🔒</span>
+                <span class="ablocktxt">历史趋势 · 详细分析 · 学习建议 — 付费解锁</span>
+              </div>
+            </div>
+
+            <div class="abcard">
+              <div class="abh">
+                <div><div class="abn">语感</div><div class="abg">魔法药水猜猜 · 单词卡牌</div></div>
+                <span class="grade gt">A</span>
+              </div>
+              <div class="mbars">
+                <div class="mbar" style="height:12px;background:#9FE1CB;"></div>
+                <div class="mbar" style="height:18px;background:#9FE1CB;"></div>
+                <div class="mbar" style="height:24px;background:#0D9B65;"></div>
+                <div class="mbar" style="height:26px;background:#0D9B65;"></div>
+                <div class="mbar" style="height:24px;background:#0D9B65;"></div>
+              </div>
+              <div class="abinsight">本周新掌握词汇 14 个，猜词准确率 82%</div>
+              <div class="ablocked">
+                <span style="font-size:11px;">🔒</span>
+                <span class="ablocktxt">历史趋势 · 详细分析 · 学习建议 — 付费解锁</span>
+              </div>
+            </div>
+
+            <div class="cvcard">
+              <div class="cvtitle">解锁完整能力报告</div>
+              <div class="cvsub">历史趋势对比 · 薄弱项分析<br>个性化学习建议 · 年度成长轨迹</div>
+              <div class="cvbtn">查看年度课程方案 →</div>
+            </div>
+
+            <div class="sp"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ 时长解锁弹窗 -->
+  <div class="col">
+    <span class="col-label">⑤ 时长解锁弹窗</span>
+    <div class="phone">
+      <div class="di"></div>
+      <div class="screen" style="padding-top:44px; position:relative; overflow:hidden;">
+
+        <!-- 背景（首页模糊底层） -->
+        <div style="flex:1; overflow:hidden; opacity:0.35; pointer-events:none;">
+          <div class="hero" style="padding:12px 13px 13px;">
+            <div class="mrow">
+              <div class="mwrap"><div class="mbody" style="animation:none;"><svg width="30" height="30" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="18" r="17" fill="#58CC02"/><path d="M12 23 Q18 27 24 23" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg></div></div>
+              <div class="bubble"><div class="bm">连续5天了！</div></div>
+            </div>
+            <div class="bigbtn" style="box-shadow:none;">
+              <div class="bbl"><span class="bbe">继续上次</span><span class="bbn">⚡ 口算跑酷</span></div>
+            </div>
+          </div>
+          <div class="ggrid" style="padding:8px 13px;">
+            <div class="gc gc1" style="box-shadow:none;"><div class="gn">口算跑酷</div></div>
+            <div class="gc gc2" style="box-shadow:none;"><div class="gn">聪明格</div></div>
+          </div>
+        </div>
+
+        <!-- 遮罩+弹窗 -->
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(20,16,10,0.52);display:flex;flex-direction:column;justify-content:flex-end;">
+          <div class="sheet">
+            <div class="shdl"></div>
+            <div class="shico">⏰</div>
+            <div class="sht">今天的时间到啦</div>
+            <div class="shs">小明今天已经玩了 30 分钟<br>请爸爸妈妈帮忙解锁继续</div>
+            <div class="vbox">
+              <div class="vq">请家长将以下大写数字转为阿拉伯数字</div>
+              <div class="vcn">壹佰贰拾捌</div>
+              <div class="vcn-sub">孩子不认识大写数字</div>
+              <div class="vinput">
+                <div class="vdig filled">1</div>
+                <div class="vdig cursor"></div>
+                <div class="vdig"></div>
+              </div>
+            </div>
+            <div class="unlockbtn">验证并延长 15 分钟</div>
+            <div class="peekrow">
+              <span class="peekarr">↗</span>
+              <span>顺便看看小明本周表现</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ 游戏成绩页 -->
+  <div class="col">
+    <span class="col-label">⑥ 游戏成绩页</span>
+    <div class="phone">
+      <div class="di"></div>
+      <div class="screen">
+        <div class="score-header">
+          <div class="sgname">口算跑酷</div>
+          <div class="sgresult">本局成绩</div>
+          <div class="sgbig">1340</div>
+          <div class="sgunit">米</div>
+          <div class="sgnew">🎉 新纪录！</div>
+        </div>
+        <div class="scroll-body">
+          <div class="sbody">
+
+            <div class="scmp">
+              <div class="scmpcard">
+                <div class="scmpl">我的最佳</div>
+                <div class="scmpv hi">1340m</div>
+                <div class="scmps win">🎉 新纪录</div>
+              </div>
+              <div class="scmpcard">
+                <div class="scmpl">好友最高</div>
+                <div class="scmpv">1480m</div>
+                <div class="scmps">还差 140m</div>
+              </div>
+            </div>
+
+            <div class="abilpeek">
+              <div class="apt">这局锻炼了</div>
+              <div class="apitems">
+                <div class="apitem">
+                  <div class="apdot" style="background:#7C5CBF;"></div>
+                  <span class="apname">数感</span>
+                  <div class="apbar"><div class="apfill" style="width:75%;background:#7C5CBF;"></div></div>
+                </div>
+                <div class="apitem">
+                  <div class="apdot" style="background:#FF9600;"></div>
+                  <span class="apname">反应力</span>
+                  <div class="apbar"><div class="apfill" style="width:90%;background:#FF9600;"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sharebox">
+              <div class="sharehint">破了新纪录，让爸妈看看？</div>
+              <div class="sharebtn">
+                <span class="sbico">👨‍👩‍👦</span>
+                <div>
+                  <div class="sbtxt">查看我的能力报告</div>
+                  <div class="sbsub">让爸妈了解我的进步</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="replaybtn">再来一局 ▶</div>
+            <div class="sp"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const faces = [
+    "M12 23 Q18 27 24 23",
+    "M11 22 Q18 29 25 22",
+    "M13 24 Q18 26 23 24",
+  ];
+  let fi = 0;
+  document.querySelectorAll('[id^="mouth"]').forEach(() => {});
+  setInterval(() => {
+    fi = (fi + 1) % faces.length;
+    document.querySelectorAll('path[id="mouth"]').forEach(el => {
+      el.setAttribute('d', faces[fi]);
+    });
+  }, 2200);
+</script>
+
+</body>
+</html>

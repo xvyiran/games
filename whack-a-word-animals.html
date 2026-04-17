@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>单词打地鼠 · Animals</title>
+<!--
+  组件名：单词打地鼠 · Animals 主题（whack-a-word-animals）
+  用途：英语词汇分类训练游戏原型（v1）
+  机制参考：
+    - 经典打地鼠 + 心理学 Go/No-Go 范式
+    - 教材主题词汇法（topic-based vocabulary）
+    - Duolingo 视觉色系
+  核心规则：只打符合当前规则的词（本轮 = Animal），干扰词不能打
+  可配置参数：全部集中在 CONFIG 对象
+  组件类型：场景模版（完整游戏场景）
+  日期：2026-04-17
+-->
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #2a3547;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #phone {
+    width: 414px; height: 736px;
+    position: relative;
+    background: #fffaf0;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.4);
+  }
+  canvas { display: block; width: 100%; height: 100%; cursor: pointer; touch-action: none; }
+  @media (max-width: 430px) {
+    body { background: #fffaf0; }
+    #phone { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<div id="phone">
+  <canvas id="game" width="414" height="736"></canvas>
+</div>
+<script>
+(function() {
+  'use strict';
+
+  // =================== 配置 CONFIG ===================
+  const CONFIG = {
+    // 基础
+    gameDuration: 60,            // 单局时长（秒）
+    initialLives: 3,             // 初始生命
+
+    // 地鼠出现节奏
+    moleVisibleDuration: 1800,   // 初始露头时长（ms）
+    moleRiseDuration: 200,
+    moleFallDuration: 180,
+    spawnInterval: 900,          // 初始生成间隔（ms）
+    spawnJitter: 150,
+    maxSimultaneousMoles: 2,
+
+    // 难度曲线（到 30s 线性压到以下数值）
+    difficultyRampSeconds: 30,
+    minSpawnInterval: 650,
+    minVisibleDuration: 1300,
+    maxMolesLateGame: 3,
+
+    // 分数/判定
+    hitScore: 10,
+    comboBonusPer: 3,            // 每 3 连击 +2 额外
+    wrongHitLifeLoss: 1,
+    missResetsCombo: true,
+
+    // 词库比例
+    animalRatio: 0.70,               // 动物出现概率
+    extensionInAnimalsRatio: 0.30,   // 动物中的拓展新词占比
+
+    // 颜色（Duolingo-ish 柔和）
+    colors: {
+      skyTop: '#fef6e4',
+      skyBot: '#fff1d4',
+      grassTop: '#b8e986',
+      grassBot: '#88c956',
+      grassDark: '#6ba845',
+      hole: '#5d3a20',
+      holeDark: '#2e1a0b',
+      moleBody: '#b07a4e',
+      moleBody2: '#8e5e3a',
+      moleBelly: '#f5d6b3',
+      moleSnout: '#7a4829',
+      wordSign: '#fffae8',
+      wordSignShadow: '#c9b98a',
+      textOnSign: '#3d2817',
+      primary: '#58cc02',
+      primaryDark: '#45a301',
+      secondary: '#1cb0f6',
+      secondaryDark: '#1690cc',
+      danger: '#ff4b4b',
+      dangerDark: '#cc3838',
+      gold: '#ffc800',
+      textDark: '#3c3c3c',
+      textLight: '#888',
+      cardBg: '#ffffff',
+    },
+  };
+
+  // =================== 词库 WORD BANK ===================
+  // type: 'animal_known' | 'animal_new' | 'distractor'
+  const WORD_BANK = {
+    animals_inCurriculum: [
+      { word: 'cat', meaning: '猫' },
+      { word: 'dog', meaning: '狗' },
+      { word: 'bird', meaning: '鸟' },
+      { word: 'fish', meaning: '鱼' },
+      { word: 'duck', meaning: '鸭' },
+      { word: 'pig', meaning: '猪' },
+      { word: 'rabbit', meaning: '兔子' },
+      { word: 'monkey', meaning: '猴子' },
+      { word: 'elephant', meaning: '大象' },
+      { word: 'panda', meaning: '熊猫' },
+      { word: 'tiger', meaning: '老虎' },
+      { word: 'lion', meaning: '狮子' },
+      { word: 'bear', meaning: '熊' },
+      { word: 'cow', meaning: '奶牛' },
+      { word: 'horse', meaning: '马' },
+      { word: 'sheep', meaning: '羊' },
+      { word: 'mouse', meaning: '老鼠' },
+    ],
+    animals_extension: [
+      { word: 'fox', meaning: '狐狸' },
+      { word: 'wolf', meaning: '狼' },
+      { word: 'deer', meaning: '鹿' },
+      { word: 'zebra', meaning: '斑马' },
+      { word: 'giraffe', meaning: '长颈鹿' },
+      { word: 'koala', meaning: '考拉' },
+      { word: 'penguin', meaning: '企鹅' },
+      { word: 'dolphin', meaning: '海豚' },
+      { word: 'frog', meaning: '青蛙' },
+      { word: 'owl', meaning: '猫头鹰' },
+    ],
+    distractors: [
+      // 场所
+      { word: 'farm',    meaning: '农场',     cat: '场所' },
+      { word: 'zoo',     meaning: '动物园',   cat: '场所' },
+      { word: 'forest',  meaning: '森林',     cat: '场所' },
+      // 身体部位
+      { word: 'tail',    meaning: '尾巴',     cat: '身体部位' },
+      { word: 'wing',    meaning: '翅膀',     cat: '身体部位' },
+      { word: 'feather', meaning: '羽毛',     cat: '身体部位' },
+      // 植物
+      { word: 'tree',    meaning: '树',       cat: '植物' },
+      { word: 'flower',  meaning: '花',       cat: '植物' },
+      { word: 'grass',   meaning: '草',       cat: '植物' },
+      // 相关食物
+      { word: 'milk',    meaning: '牛奶',     cat: '食物' },
+      { word: 'egg',     meaning: '蛋',       cat: '食物' },
+      { word: 'meat',    meaning: '肉',       cat: '食物' },
+      // 相关人物
+      { word: 'farmer',  meaning: '农民',     cat: '人物' },
+    ],
+  };
+  WORD_BANK.animals_inCurriculum.forEach(w => w.type = 'animal_known');
+  WORD_BANK.animals_extension.forEach(w => w.type = 'animal_new');
+  WORD_BANK.distractors.forEach(w => w.type = 'distractor');
+
+  // =================== Canvas & 简写 ===================
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const C = CONFIG.colors;
+
+  // =================== 工具函数 ===================
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const randi = (a, b) => Math.floor(rand(a, b + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const easeOutBack = t => {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  };
+  const easeInBack = t => {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return c3 * t * t * t - c1 * t * t;
+  };
+  const easeOutQuad = t => 1 - (1 - t) * (1 - t);
+
+  // =================== 音频（Web Audio 合成）===================
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) {}
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function tone(freq, dur, type = 'sine', vol = 0.15, delay = 0) {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur);
+  }
+  const sfx = {
+    hit()  { tone(600, 0.08, 'sine', 0.2); tone(900, 0.1, 'sine', 0.15, 0.05); },
+    wrong(){ tone(140, 0.22, 'sawtooth', 0.18); tone(90, 0.22, 'sawtooth', 0.15, 0.06); },
+    pop()  { tone(1200, 0.04, 'square', 0.04); },
+    combo(n) {
+      const freqs = [600, 750, 900, 1050, 1200, 1350];
+      tone(freqs[Math.min(n - 2, freqs.length - 1)], 0.1, 'triangle', 0.14);
+    },
+    over() { tone(523, 0.15, 'sine', 0.18); tone(392, 0.15, 'sine', 0.18, 0.12); tone(261, 0.3, 'sine', 0.18, 0.24); },
+    start(){ tone(523, 0.08, 'triangle', 0.15); tone(659, 0.08, 'triangle', 0.15, 0.08); tone(784, 0.12, 'triangle', 0.15, 0.16); },
+    tick(n) {
+      // 倒数 3/2/1 的滴答声，越接近 0 越急促
+      const freq = n === 1 ? 1400 : (n === 2 ? 1100 : 900);
+      tone(freq, 0.08, 'square', 0.12);
+    },
+    timeUp() {
+      // "时间到" 的钟声：长音 + 下行
+      tone(880, 0.4, 'sine', 0.22);
+      tone(660, 0.35, 'sine', 0.2, 0.15);
+      tone(440, 0.5, 'sine', 0.18, 0.3);
+    },
+  };
+
+  // =================== 状态 ===================
+  const State = { MENU: 0, PLAYING: 1, GAME_OVER: 2 };
+  let game = {};
+  function resetGameState() {
+    game = {
+      state: State.MENU,
+      score: 0,
+      lives: CONFIG.initialLives,
+      combo: 0,
+      maxCombo: 0,
+      timeLeft: CONFIG.gameDuration,
+      lastSpawnTimer: 0,
+      lastTick: performance.now(),
+      holes: [],
+      moles: [],
+      particles: [],
+      floaters: [],
+      shakeMag: 0, shakeX: 0, shakeY: 0,
+      flashAlpha: 0,
+      wordStats: new Map(),  // key: word -> { data, shown, correctHit, wrongHit, ignored }
+      correctHits: 0,
+      wrongHits: 0,
+      missedAnimals: 0,
+      endTime: 0,           // 结算动画计时（ms），从 endGame 触发开始
+      endReason: '',         // 'time' | 'lives'
+      lastTickSec: -1,       // 倒计时已播放过 tick 的秒数（避免重复）
+      comboPulse: 0,         // 连击触发时的脉冲值，0-1，自然衰减
+    };
+    setupHoles();
+  }
+
+  function setupHoles() {
+    const cols = 3, rows = 3;
+    const holeW = 104, holeH = 56;
+    const gapX = 16, gapY = 52;
+    const totalW = cols * holeW + (cols - 1) * gapX;
+    const startX = (W - totalW) / 2 + holeW / 2;
+    const fieldTop = 285;
+    const holes = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        holes.push({
+          x: startX + c * (holeW + gapX),
+          y: fieldTop + r * (holeH + gapY),
+          w: holeW, h: holeH,
+          occupied: false,
+        });
+      }
+    }
+    game.holes = holes;
+  }
+
+  // =================== 难度曲线 ===================
+  function difficultyProgress() {
+    const elapsed = CONFIG.gameDuration - game.timeLeft;
+    return clamp(elapsed / CONFIG.difficultyRampSeconds, 0, 1);
+  }
+  function curSpawnInterval() {
+    const p = difficultyProgress();
+    return CONFIG.spawnInterval + (CONFIG.minSpawnInterval - CONFIG.spawnInterval) * p;
+  }
+  function curMaxMoles() {
+    const p = difficultyProgress();
+    return p < 0.5 ? CONFIG.maxSimultaneousMoles : CONFIG.maxMolesLateGame;
+  }
+  function curVisibleDuration() {
+    const p = difficultyProgress();
+    return CONFIG.moleVisibleDuration + (CONFIG.minVisibleDuration - CONFIG.moleVisibleDuration) * p;
+  }
+
+  // =================== 词选择 ===================
+  function pickNextWord() {
+    const r = Math.random();
+    if (r < CONFIG.animalRatio) {
+      if (Math.random() < CONFIG.extensionInAnimalsRatio) {
+        return WORD_BANK.animals_extension[randi(0, WORD_BANK.animals_extension.length - 1)];
+      }
+      return WORD_BANK.animals_inCurriculum[randi(0, WORD_BANK.animals_inCurriculum.length - 1)];
+    }
+    return WORD_BANK.distractors[randi(0, WORD_BANK.distractors.length - 1)];
+  }
+
+  function trySpawnMole() {
+    const activeCount = game.moles.filter(m => m.state !== 'done').length;
+    if (activeCount >= curMaxMoles()) return;
+    const free = game.holes.filter(h => !h.occupied);
+    if (!free.length) return;
+    const hole = free[randi(0, free.length - 1)];
+    const word = pickNextWord();
+    hole.occupied = true;
+    game.moles.push({
+      hole, word,
+      state: 'rising',
+      stateTime: 0,
+      visibleDuration: curVisibleDuration(),
+      y: 0,
+      hitAnim: 0,
+    });
+    // 记录词曝光
+    if (!game.wordStats.has(word.word)) {
+      game.wordStats.set(word.word, {
+        data: word, shown: 0, correctHit: 0, wrongHit: 0, ignored: 0,
+      });
+    }
+    game.wordStats.get(word.word).shown++;
+    sfx.pop();
+  }
+
+  // =================== 交互 ===================
+  function handleTap(x, y) {
+    ensureAudio();
+    if (game.state === State.MENU) {
+      if (Math.abs(x - W/2) < 130 && y > 555 && y < 635) {
+        sfx.start();
+        startGame();
+      }
+      return;
+    }
+    if (game.state === State.GAME_OVER) {
+      // 结算动画还没播完，暂不响应
+      if (game.endTime < 2100) return;
+      if (Math.abs(x - W/2) < 130 && y > H - 100 && y < H - 30) {
+        sfx.start();
+        startGame();
+      }
+      return;
+    }
+    if (game.state === State.PLAYING) {
+      // 从后往前找可点击地鼠（最新的在上层）
+      for (let i = game.moles.length - 1; i >= 0; i--) {
+        const m = game.moles[i];
+        if (m.state === 'hit' || m.state === 'done' || m.state === 'falling') continue;
+        if (m.y < 0.4) continue;
+        const hx = m.hole.x, hy = m.hole.y - 55 * m.y;
+        const dx = x - hx, dy = y - hy;
+        if (dx*dx + dy*dy < 72*72) {
+          onMoleHit(m);
+          return;
+        }
+      }
+    }
+  }
+
+  function onMoleHit(mole) {
+    const isAnimal = mole.word.type !== 'distractor';
+    const stat = game.wordStats.get(mole.word.word);
+    mole.state = 'hit';
+    mole.stateTime = 0;
+
+    if (isAnimal) {
+      game.combo++;
+      if (game.combo > game.maxCombo) game.maxCombo = game.combo;
+      game.correctHits++;
+      stat.correctHit++;
+
+      const bonus = Math.floor(game.combo / CONFIG.comboBonusPer) * 2;
+      const pts = CONFIG.hitScore + bonus;
+      game.score += pts;
+
+      spawnParticles(mole.hole.x, mole.hole.y - 40, C.gold, 14);
+      if (mole.word.type === 'animal_new') {
+        spawnParticles(mole.hole.x, mole.hole.y - 40, C.secondary, 10);
+      }
+      game.floaters.push({
+        x: mole.hole.x, y: mole.hole.y - 50,
+        text: `+${pts}`, color: C.primary, size: 30, life: 0.85,
+      });
+      if (mole.word.type === 'animal_new') {
+        game.floaters.push({
+          x: mole.hole.x, y: mole.hole.y - 82,
+          text: '✨ 新词', color: C.secondary, size: 16, life: 1.2,
+        });
+      }
+      if (game.combo >= 3) {
+        game.comboPulse = 1;
+        sfx.combo(game.combo);
+      } else {
+        if (game.combo >= 2) game.comboPulse = 1;
+        sfx.hit();
+      }
+    } else {
+      game.combo = 0;
+      game.wrongHits++;
+      stat.wrongHit++;
+      game.lives -= CONFIG.wrongHitLifeLoss;
+
+      spawnParticles(mole.hole.x, mole.hole.y - 40, C.danger, 12);
+      game.floaters.push({
+        x: mole.hole.x, y: mole.hole.y - 50,
+        text: `不是动物！`, color: C.danger, size: 20, life: 1.1,
+      });
+      game.floaters.push({
+        x: mole.hole.x, y: mole.hole.y - 76,
+        text: `${mole.word.word} = ${mole.word.meaning}`,
+        color: C.textDark, size: 14, life: 1.4,
+      });
+      game.shakeMag = 14;
+      game.flashAlpha = 1;
+      sfx.wrong();
+    }
+  }
+
+  function spawnParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rand(-0.3, 0.3);
+      const speed = rand(140, 320);
+      game.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 120,
+        size: rand(3, 7),
+        color, life: rand(0.5, 0.9), maxLife: 0.9,
+      });
+    }
+  }
+
+  // =================== 流程 ===================
+  function startGame() {
+    resetGameState();
+    game.state = State.PLAYING;
+    game.lastTick = performance.now();
+  }
+  function endGame(reason) {
+    game.state = State.GAME_OVER;
+    game.endTime = 0;
+    game.endReason = reason;
+    if (reason === 'time') sfx.timeUp(); else sfx.over();
+    // 不立即清空地鼠，强制在场地鼠进入 falling 状态，优雅沉下去
+    for (const m of game.moles) {
+      if (m.state === 'rising' || m.state === 'visible') {
+        m.state = 'falling';
+        m.stateTime = 0;
+      }
+    }
+    // 仪式感：震动 + 红闪
+    game.shakeMag = 22;
+    game.flashAlpha = 0.8;
+  }
+
+  // =================== 主更新 ===================
+  function update(dt) {
+    // shake / flash 独立于 playing
+    if (game.shakeMag > 0) {
+      game.shakeMag = Math.max(0, game.shakeMag - dt * 0.06);
+      game.shakeX = (Math.random() - 0.5) * game.shakeMag;
+      game.shakeY = (Math.random() - 0.5) * game.shakeMag;
+    } else { game.shakeX = game.shakeY = 0; }
+    if (game.flashAlpha > 0) game.flashAlpha = Math.max(0, game.flashAlpha - dt / 380);
+    if (game.comboPulse > 0) game.comboPulse = Math.max(0, game.comboPulse - dt / 350);
+
+    // 粒子、浮字永远更新
+    for (const p of game.particles) {
+      p.x += p.vx * dt / 1000;
+      p.y += p.vy * dt / 1000;
+      p.vy += 700 * dt / 1000;
+      p.life -= dt / 1000;
+    }
+    game.particles = game.particles.filter(p => p.life > 0);
+    for (const f of game.floaters) {
+      f.y -= 45 * dt / 1000;
+      f.life -= dt / 1000;
+    }
+    game.floaters = game.floaters.filter(f => f.life > 0);
+
+    if (game.state !== State.PLAYING) {
+      // GAME_OVER 状态：让在场地鼠继续沉下去，并累计结算动画时间
+      if (game.state === State.GAME_OVER) {
+        game.endTime += dt;
+        for (const m of game.moles) {
+          m.stateTime += dt;
+          if (m.state === 'falling') {
+            m.y = 1 - easeInBack(clamp(m.stateTime / CONFIG.moleFallDuration, 0, 1));
+            if (m.stateTime >= CONFIG.moleFallDuration) {
+              m.state = 'done'; m.hole.occupied = false;
+            }
+          } else if (m.state === 'hit') {
+            m.y = 1;
+            m.hitAnim = clamp(m.stateTime / 220, 0, 1);
+            if (m.stateTime >= 220) { m.state = 'done'; m.hole.occupied = false; }
+          }
+        }
+        game.moles = game.moles.filter(m => m.state !== 'done');
+      }
+      return;
+    }
+
+    // 计时器
+    game.timeLeft -= dt / 1000;
+    if (game.timeLeft <= 0) { game.timeLeft = 0; endGame('time'); return; }
+    if (game.lives <= 0) { endGame('lives'); return; }
+
+    // 倒计时 tick 音效（最后 3 秒，每秒一下）
+    const curSec = Math.ceil(game.timeLeft);
+    if (curSec >= 1 && curSec <= 3 && curSec !== game.lastTickSec) {
+      game.lastTickSec = curSec;
+      sfx.tick(curSec);
+    }
+
+    // 生成（最后 1.5s 停止生成，让场面自然安静下来）
+    game.lastSpawnTimer += dt;
+    const interval = curSpawnInterval() + rand(-CONFIG.spawnJitter, CONFIG.spawnJitter);
+    if (game.lastSpawnTimer >= interval && game.timeLeft > 1.5) {
+      trySpawnMole();
+      game.lastSpawnTimer = 0;
+    }
+
+    // 地鼠状态机
+    for (const m of game.moles) {
+      m.stateTime += dt;
+      if (m.state === 'rising') {
+        m.y = easeOutBack(clamp(m.stateTime / CONFIG.moleRiseDuration, 0, 1));
+        if (m.stateTime >= CONFIG.moleRiseDuration) {
+          m.state = 'visible'; m.stateTime = 0; m.y = 1;
+        }
+      } else if (m.state === 'visible') {
+        m.y = 1;
+        if (m.stateTime >= m.visibleDuration) {
+          m.state = 'falling'; m.stateTime = 0;
+          if (m.word.type !== 'distractor') {
+            game.missedAnimals++;
+            game.wordStats.get(m.word.word).ignored++;
+            if (CONFIG.missResetsCombo) game.combo = 0;
+          }
+        }
+      } else if (m.state === 'falling') {
+        m.y = 1 - easeInBack(clamp(m.stateTime / CONFIG.moleFallDuration, 0, 1));
+        if (m.stateTime >= CONFIG.moleFallDuration) {
+          m.state = 'done'; m.hole.occupied = false;
+        }
+      } else if (m.state === 'hit') {
+        m.y = 1;
+        m.hitAnim = clamp(m.stateTime / 220, 0, 1);
+        if (m.stateTime >= 220) {
+          m.state = 'done'; m.hole.occupied = false;
+        }
+      }
+    }
+    game.moles = game.moles.filter(m => m.state !== 'done');
+  }
+
+  // =================== 渲染 ===================
+  function render() {
+    ctx.save();
+    ctx.translate(game.shakeX, game.shakeY);
+    drawBackground();
+    if (game.state === State.MENU) {
+      drawMenu();
+    } else {
+      drawPlaying();
+      drawCountdown();
+      if (game.state === State.GAME_OVER) drawGameOver();
+    }
+    if (game.flashAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 75, 75, ${game.flashAlpha * 0.28})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+  }
+
+  // --- 最后 3 秒倒计时大数字 ---
+  function drawCountdown() {
+    if (game.state !== State.PLAYING) return;
+    if (game.timeLeft > 3.0 || game.timeLeft <= 0) return;
+
+    const sec = Math.ceil(game.timeLeft);
+    if (sec < 1 || sec > 3) return;
+
+    // 秒内进度：0 = 刚进入这一秒（大而不透明），1 = 快到下一秒（小而淡）
+    const intoSec = 1 - (game.timeLeft - Math.floor(game.timeLeft));
+    // scale 从 1.8 缩到 1.0，带一点回弹
+    const scale = 1.8 - easeOutQuad(intoSec) * 0.8;
+    const alpha = (1 - intoSec * 0.6) * 0.85;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(W/2, H/2 - 30);
+    ctx.scale(scale, scale);
+
+    // 白色描边让数字从任何底色上都清晰
+    ctx.fillStyle = C.danger;
+    ctx.font = 'bold 120px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 12;
+    ctx.strokeText(String(sec), 0, 0);
+    ctx.fillText(String(sec), 0, 0);
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBackground() {
+    // 天
+    const sky = ctx.createLinearGradient(0, 0, 0, 240);
+    sky.addColorStop(0, C.skyTop);
+    sky.addColorStop(1, C.skyBot);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, 240);
+    // 地
+    const ground = ctx.createLinearGradient(0, 240, 0, H);
+    ground.addColorStop(0, C.grassTop);
+    ground.addColorStop(1, C.grassBot);
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, 240, W, H - 240);
+    // 地平线上的小草
+    ctx.fillStyle = C.grassDark;
+    for (let x = 0; x < W; x += 8) {
+      const h = 3 + ((x * 13) % 5);
+      ctx.fillRect(x, 240 - h, 2, h);
+    }
+  }
+
+  // --- Menu ---
+  function drawMenu() {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+
+    // 标题
+    ctx.fillStyle = C.textDark;
+    ctx.font = 'bold 42px sans-serif';
+    ctx.fillText('单词打地鼠', W/2, 170);
+    ctx.fillStyle = C.textLight;
+    ctx.font = '16px sans-serif';
+    ctx.fillText('🐾 Animals · 动物主题', W/2, 200);
+
+    // 形象
+    drawMascot(W/2, 340);
+
+    // 规则卡
+    drawRoundRect(30, 430, W - 60, 105, 18, '#fff');
+    ctx.fillStyle = C.primary;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('本轮规则', W/2, 460);
+    ctx.fillStyle = C.textDark;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('🐾 只打 Animal', W/2, 492);
+    ctx.fillStyle = C.textLight;
+    ctx.font = '13px sans-serif';
+    ctx.fillText('看见动物单词立刻打，其他单词不要打', W/2, 518);
+
+    // 按钮
+    drawButton(W/2, 595, 260, 70, '开始挑战', C.primary, C.primaryDark);
+
+    // 底部提示
+    ctx.fillStyle = C.textLight;
+    ctx.font = '12px sans-serif';
+    ctx.fillText('用时 60s · 3 条生命 · 打错扣命', W/2, 680);
+  }
+
+  function drawMascot(cx, cy) {
+    // 土堆
+    ctx.fillStyle = C.hole;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 32, 95, 22, 0, 0, Math.PI);
+    ctx.fill();
+    ctx.fillStyle = C.holeDark;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 32, 72, 12, 0, 0, Math.PI);
+    ctx.fill();
+
+    // 地鼠主体
+    ctx.save();
+    ctx.translate(cx, cy - 5);
+    // 身体
+    ctx.fillStyle = C.moleBody;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 50, 52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 肚子
+    ctx.fillStyle = C.moleBelly;
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 32, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 耳朵
+    ctx.fillStyle = C.moleBody2;
+    ctx.beginPath();
+    ctx.arc(-30, -35, 10, 0, Math.PI * 2);
+    ctx.arc(30, -35, 10, 0, Math.PI * 2);
+    ctx.fill();
+    // 眼
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(-14, -10, 5, 0, Math.PI * 2);
+    ctx.arc(14, -10, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-12, -11, 1.5, 0, Math.PI * 2);
+    ctx.arc(16, -11, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    // 鼻
+    ctx.fillStyle = C.moleSnout;
+    ctx.beginPath();
+    ctx.ellipse(0, 5, 11, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.ellipse(0, 1, 3.5, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 门牙
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-4, 8, 3, 7);
+    ctx.fillRect(1, 8, 3, 7);
+    ctx.restore();
+  }
+
+  // --- Playing ---
+  function drawPlaying() {
+    drawHUD();
+    drawRuleBanner();
+    drawHolesAndMoles();
+    drawParticles();
+    drawFloaters();
+    drawComboBar();
+  }
+
+  function drawHUD() {
+    drawRoundRect(16, 20, W - 32, 72, 20, '#fff');
+
+    // Timer
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = C.textLight;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('时间', 34, 44);
+    const tColor = game.timeLeft > 10 ? C.secondary : C.danger;
+    ctx.fillStyle = tColor;
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(Math.ceil(game.timeLeft) + 's', 34, 76);
+
+    // Score
+    ctx.textAlign = 'center';
+    ctx.fillStyle = C.textLight;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('得分', W/2, 44);
+    ctx.fillStyle = C.gold;
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(String(game.score), W/2, 76);
+
+    // Lives
+    ctx.textAlign = 'right';
+    ctx.fillStyle = C.textLight;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('生命', W - 34, 44);
+    for (let i = 0; i < CONFIG.initialLives; i++) {
+      const hx = W - 38 - (CONFIG.initialLives - 1 - i) * 24;
+      drawHeart(hx, 66, 10, i < game.lives ? C.danger : '#e0e0e0');
+    }
+  }
+
+  function drawRuleBanner() {
+    drawRoundRect(30, 112, W - 60, 78, 18, C.primary);
+    // Inner highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('本轮目标', W/2, 134);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.fillText('🐾 只打 Animal', W/2, 170);
+  }
+
+  function drawHolesAndMoles() {
+    // 按 y 坐标从上到下画（保证下方的遮上方）
+    const sorted = game.holes.slice().sort((a, b) => a.y - b.y);
+    for (const hole of sorted) drawHole(hole);
+    const sortedMoles = game.moles.slice().sort((a, b) => a.hole.y - b.hole.y);
+    for (const m of sortedMoles) drawMole(m);
+  }
+
+  function drawHole(hole) {
+    const { x: cx, y: cy, w, h } = hole;
+    // 草圈
+    ctx.fillStyle = C.grassDark;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 3, w/2 + 12, h/2 + 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 洞
+    ctx.fillStyle = C.hole;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, w/2, h/2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 深内
+    ctx.fillStyle = C.holeDark;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 3, w/2 - 8, h/2 - 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawMole(mole) {
+    const { hole, y: visibility } = mole;
+    ctx.save();
+    // 限定在洞上方绘制，避免穿透地面
+    ctx.beginPath();
+    ctx.rect(0, 0, W, hole.y + hole.h/2 + 4);
+    ctx.clip();
+
+    const moleY = hole.y - 90 * visibility + 30;
+    let sx = 1, sy = 1;
+    if (mole.state === 'hit') {
+      sy = 1 - mole.hitAnim * 0.5;
+      sx = 1 + mole.hitAnim * 0.35;
+    }
+    ctx.translate(hole.x, moleY);
+    ctx.scale(sx, sy);
+
+    // 身体
+    ctx.fillStyle = C.moleBody;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 44, 52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 肚子
+    ctx.fillStyle = C.moleBelly;
+    ctx.beginPath();
+    ctx.ellipse(0, 14, 30, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 耳
+    ctx.fillStyle = C.moleBody2;
+    ctx.beginPath();
+    ctx.arc(-28, -34, 9, 0, Math.PI * 2);
+    ctx.arc(28, -34, 9, 0, Math.PI * 2);
+    ctx.fill();
+    // 眼（被打时变 X）
+    if (mole.state === 'hit') {
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-18, -15); ctx.lineTo(-10, -7);
+      ctx.moveTo(-10, -15); ctx.lineTo(-18, -7);
+      ctx.moveTo(10, -15); ctx.lineTo(18, -7);
+      ctx.moveTo(18, -15); ctx.lineTo(10, -7);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(-13, -12, 5, 0, Math.PI * 2);
+      ctx.arc(13, -12, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(-11, -13, 1.8, 0, Math.PI * 2);
+      ctx.arc(15, -13, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 鼻
+    ctx.fillStyle = C.moleSnout;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 9, 6.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.ellipse(0, -1, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 单词牌（胸前）
+    if (mole.state !== 'hit') {
+      const txt = mole.word.word;
+      ctx.font = 'bold 18px sans-serif';
+      const tw = ctx.measureText(txt).width;
+      const signW = Math.max(72, tw + 22);
+      const signH = 28;
+      const signY = 22;
+
+      // 影
+      ctx.fillStyle = C.wordSignShadow;
+      roundRectPath(-signW/2, signY - signH/2 + 2, signW, signH, 7);
+      ctx.fill();
+      // 牌
+      ctx.fillStyle = C.wordSign;
+      roundRectPath(-signW/2, signY - signH/2, signW, signH, 7);
+      ctx.fill();
+      // 字
+      ctx.fillStyle = C.textOnSign;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(txt, 0, signY + 1);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    ctx.restore();
+  }
+
+  function drawParticles() {
+    for (const p of game.particles) {
+      const alpha = clamp(p.life / p.maxLife, 0, 1);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFloaters() {
+    for (const f of game.floaters) {
+      const alpha = clamp(f.life / 0.6, 0, 1);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = f.color;
+      ctx.font = `bold ${f.size}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 4;
+      ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 底部连击条（第三排地鼠下方的草地区域，不会遮挡任何地鼠）
+  // combo >= 2 时持续显示，每次增加时做 scale 脉冲
+  function drawComboBar() {
+    if (game.state !== State.PLAYING) return;
+    if (game.combo < 2) return;
+
+    const cy = 605;
+    const pulse = easeOutQuad(game.comboPulse);
+    const scale = 1 + pulse * 0.22;
+    const alpha = 0.85 + pulse * 0.15;
+
+    ctx.save();
+    ctx.translate(W/2, cy);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = alpha;
+
+    const text = `🔥 连击 ×${game.combo}`;
+    ctx.font = 'bold 20px sans-serif';
+    const tw = ctx.measureText(text).width;
+    const bgW = tw + 32;
+    const bgH = 34;
+
+    // 背景胶囊：基础深色 + 脉冲时金光
+    ctx.fillStyle = `rgba(0, 0, 0, 0.28)`;
+    roundRectPath(-bgW/2, -bgH/2, bgW, bgH, 17);
+    ctx.fill();
+    if (pulse > 0.05) {
+      ctx.fillStyle = `rgba(255, 200, 0, ${pulse * 0.5})`;
+      roundRectPath(-bgW/2, -bgH/2, bgW, bgH, 17);
+      ctx.fill();
+    }
+
+    // 文字
+    ctx.fillStyle = C.gold;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(text, 0, 0);
+    ctx.fillText(text, 0, 0);
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // --- Game Over（分阶段过渡动画）---
+  // 节拍：
+  //   0-350ms:    大字"时间到！/ 生命耗尽"弹入
+  //   350-1100ms: 保持（~750ms 停顿感，是整个结束节奏的核心）
+  //   1100-1450ms: 上飞 + 淡出
+  //   1200-1600ms: 遮罩渐入
+  //   1300-1950ms: 结算卡从下方带回弹滑入
+  //   1950-2450ms: 分数从 0 滚动到最终值
+  //   2250ms+:    三个词组依次淡入（间隔 250ms）
+  //   2900ms+:    按钮淡入且可点击
+  function drawGameOver() {
+    const t = game.endTime;
+
+    // === 阶段 1：大字 ===
+    if (t < 1450) {
+      const bigText = game.endReason === 'lives' ? '💥 生命耗尽' : '⏰ 时间到！';
+      let scale, alpha, offY;
+      if (t < 350) {
+        // 弹入
+        scale = 0.3 + easeOutBack(t / 350) * 0.8;
+        alpha = clamp(t / 180, 0, 1);
+        offY = 0;
+      } else if (t < 1100) {
+        // 保持（有轻微呼吸动效，让停顿不死板）
+        const breath = Math.sin((t - 350) / 200) * 0.02;
+        scale = 1.0 + breath;
+        alpha = 1;
+        offY = 0;
+      } else {
+        // 上飞 + 淡出
+        const p = (t - 1100) / 350;
+        scale = 1.0;
+        alpha = 1 - p;
+        offY = -p * 90;
+      }
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(W/2, H/2 - 40 + offY);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = C.danger;
+      ctx.font = 'bold 46px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 8;
+      ctx.strokeText(bigText, 0, 0);
+      ctx.fillText(bigText, 0, 0);
+      ctx.restore();
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // === 阶段 2：遮罩渐入（banner 开始飞出后才开始变暗）===
+    const overlayAlpha = clamp((t - 1200) / 400, 0, 1) * 0.55;
+    if (overlayAlpha > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${overlayAlpha})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // t < 1300ms 时结算卡还没开始画
+    if (t < 1300) return;
+
+    // === 阶段 3：结算卡从下方带回弹滑入 ===
+    const cardP = clamp((t - 1300) / 650, 0, 1);
+    const cardEase = easeOutBack(cardP);
+    const cardOffY = (1 - cardEase) * 500;
+
+    ctx.save();
+    ctx.translate(0, cardOffY);
+
+    drawRoundRect(18, 50, W - 36, H - 120, 24, '#fff');
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+
+    // 标题
+    ctx.fillStyle = C.textDark;
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('🏆 本局结算', W/2, 95);
+
+    // 分数卡
+    drawRoundRect(36, 114, W - 72, 74, 14, '#fef6d5');
+
+    // === 阶段 4：分数滚动 ===
+    const scoreP = clamp((t - 1950) / 500, 0, 1);
+    const displayScore = Math.floor(game.score * easeOutQuad(scoreP));
+    ctx.fillStyle = C.gold;
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText(displayScore + ' 分', W/2, 160);
+
+    // 统计（scoreP 完成后才显示）
+    if (scoreP > 0.5) {
+      ctx.globalAlpha = clamp((scoreP - 0.5) * 2, 0, 1);
+      ctx.fillStyle = C.textLight;
+      ctx.font = '12px sans-serif';
+      ctx.fillText(
+        `打中 ${game.correctHits} · 打错 ${game.wrongHits} · 漏打 ${game.missedAnimals} · 最高连击 ${game.maxCombo}`,
+        W/2, 180
+      );
+      ctx.globalAlpha = 1;
+    }
+
+    // 学习汇总标题（卡片完全弹出后才显示）
+    const labelAlpha = clamp((t - 2050) / 300, 0, 1);
+    if (labelAlpha > 0) {
+      ctx.globalAlpha = labelAlpha;
+      ctx.fillStyle = C.textDark;
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('本局孩子见到的单词', 36, 215);
+      ctx.globalAlpha = 1;
+    }
+
+    // === 阶段 5：三个词组依次淡入 ===
+    const inCurr = [], newW = [], distr = [];
+    game.wordStats.forEach(s => {
+      if (s.data.type === 'animal_known') inCurr.push(s);
+      else if (s.data.type === 'animal_new') newW.push(s);
+      else distr.push(s);
+    });
+
+    const groups = [];
+    if (inCurr.length) groups.push({ title: `🎒 课内动物 ${inCurr.length}`, items: inCurr, color: C.primary });
+    if (newW.length)  groups.push({ title: `✨ 拓展新词 ${newW.length}`, items: newW, color: C.secondary });
+    if (distr.length) groups.push({ title: `🙅 不是动物 ${distr.length}`, items: distr, color: '#9a9a9a' });
+
+    let y = 230;
+    const groupStartTime = 2250;
+    const groupDelay = 250;
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i];
+      const gAlpha = clamp((t - groupStartTime - i * groupDelay) / 300, 0, 1);
+      if (gAlpha > 0) {
+        ctx.globalAlpha = gAlpha;
+        // 轻微上移效果
+        const gOffY = (1 - gAlpha) * 12;
+        ctx.save();
+        ctx.translate(0, -gOffY);
+        y = drawWordGroup(y, g.title, g.items, g.color);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      } else {
+        // 占位，保持后续组的 y 正确（虽然本次不画）
+        y = estimateGroupHeight(y, g.items);
+      }
+    }
+
+    // === 阶段 6：按钮淡入并可交互 ===
+    const btnAlpha = clamp((t - 2900) / 350, 0, 1);
+    if (btnAlpha > 0) {
+      ctx.globalAlpha = btnAlpha;
+      drawButton(W/2, H - 65, 260, 62, '再来一局', C.primary, C.primaryDark);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+  }
+
+  // 预估词组占用高度（用于淡入时保持后续组的 y 占位）
+  function estimateGroupHeight(startY, items) {
+    let x = 36, y = startY + 12;
+    const maxX = W - 36, lineH = 26;
+    for (const s of items) {
+      ctx.font = 'bold 12px sans-serif';
+      const ww = ctx.measureText(s.data.word).width;
+      ctx.font = '11px sans-serif';
+      const mw = ctx.measureText(s.data.meaning).width;
+      const pillW = ww + mw + 22;
+      if (x + pillW > maxX) { x = 36; y += lineH; }
+      x += pillW + 5;
+    }
+    return y + 30;
+  }
+
+  function drawWordGroup(startY, title, items, color) {
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(title, 36, startY);
+
+    let x = 36;
+    let y = startY + 12;
+    const maxX = W - 36;
+    const lineH = 26;
+
+    for (const s of items) {
+      const w = s.data.word;
+      const m = s.data.meaning;
+
+      ctx.font = 'bold 12px sans-serif';
+      const ww = ctx.measureText(w).width;
+      ctx.font = '11px sans-serif';
+      const mw = ctx.measureText(m).width;
+      const pillW = ww + mw + 22;
+
+      if (x + pillW > maxX) { x = 36; y += lineH; }
+
+      // 背景：打中=绿底，打错=红底，未打=灰底
+      let bg = '#f2f2f2';
+      if (s.correctHit > 0) bg = '#e6f5d4';
+      else if (s.wrongHit > 0) bg = '#ffe4e4';
+      roundRectPath(x, y, pillW, 20, 10);
+      ctx.fillStyle = bg;
+      ctx.fill();
+
+      // 文字
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = C.textDark;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(w, x + 8, y + 10);
+      ctx.fillStyle = C.textLight;
+      ctx.font = '11px sans-serif';
+      ctx.fillText(m, x + 8 + ww + 5, y + 10);
+      ctx.textBaseline = 'alphabetic';
+
+      x += pillW + 5;
+    }
+    return y + 30;
+  }
+
+  // =================== 通用绘图 ===================
+  function roundRectPath(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+  function drawRoundRect(x, y, w, h, r, fill) {
+    roundRectPath(x, y, w, h, r);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  function drawButton(cx, cy, w, h, text, color, darkColor) {
+    // Duolingo 3D 按钮
+    ctx.fillStyle = darkColor;
+    roundRectPath(cx - w/2, cy - h/2 + 4, w, h, 16);
+    ctx.fill();
+    ctx.fillStyle = color;
+    roundRectPath(cx - w/2, cy - h/2, w, h, 16);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, cx, cy + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+  function drawHeart(cx, cy, size, color) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    const off = -size * 0.4;
+    ctx.moveTo(0, off + size * 0.3);
+    ctx.bezierCurveTo(0, off, -size, off, -size, off + size * 0.5);
+    ctx.bezierCurveTo(-size, off + size * 1.1, 0, off + size * 1.4, 0, off + size * 1.8);
+    ctx.bezierCurveTo(0, off + size * 1.4, size, off + size * 1.1, size, off + size * 0.5);
+    ctx.bezierCurveTo(size, off, 0, off, 0, off + size * 0.3);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // =================== 主循环 ===================
+  function loop(now) {
+    const dt = Math.min(40, now - game.lastTick);
+    game.lastTick = now;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // =================== 输入绑定 ===================
+  function setupInput() {
+    const getPos = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const src = e.touches ? e.touches[0] : e;
+      const x = (src.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (src.clientY - rect.top) * (canvas.height / rect.height);
+      return { x, y };
+    };
+    canvas.addEventListener('mousedown', e => {
+      const p = getPos(e); handleTap(p.x, p.y);
+    });
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const p = getPos(e); handleTap(p.x, p.y);
+    }, { passive: false });
+  }
+
+  // =================== 启动 ===================
+  function main() {
+    resetGameState();
+    setupInput();
+    requestAnimationFrame(loop);
+  }
+  main();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>熔字铁砧 v9</title>
+<!--
+  组件名称：熔字铁砧 v9
+  用途：汉字偏旁组字游戏 - 数据质量修复版
+  类型：场景模版
+  日期：2026-04-23
+
+  v9 相对 v8 的修复：
+    1. 补入2个之前遗漏的字：
+       - 杳 (木+日，上下，yǎo，"杳无音信")
+       - 杲 (日+木，上下，gǎo，"杲日初升"，明亮貌)
+    2. 字库从24→26字
+    3. 补充对应订单文案
+    4. ⚠️重要：demo字库仍非权威数据源，生产环境必须使用权威汉字拆字库
+       详见配套的《字库验证工具》文档
+
+  可调参数：CONFIG内
+-->
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: #0f0a07;
+  min-height: 100vh;
+  display: flex; justify-content: center; align-items: center;
+  padding: 20px; overflow: hidden;
+}
+#phone-shell {
+  width: 390px; height: 844px; max-height: 100vh;
+  background: #1a110b; border-radius: 42px;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.7), inset 0 0 0 2px #0a0604, inset 0 0 0 12px #2a1d13;
+  overflow: hidden; position: relative;
+}
+#game {
+  width: 100%; height: 100%;
+  background: #fff4d6;
+  color: #3d2814;
+  display: flex; flex-direction: column;
+  position: relative;
+  padding: 10px; gap: 6px;
+  overflow: hidden;
+}
+
+/* 顶栏 */
+.top-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 10px; z-index: 2; flex-shrink: 0;
+}
+.score-display { display: flex; align-items: center; gap: 4px; font-size: 16px; font-weight: 900; color: #e89a0d; }
+.level-display { font-weight: 800; font-size: 12px; }
+.time-display {
+  font-size: 16px; font-weight: 900;
+  color: #2a6b15;
+  font-family: ui-monospace, monospace;
+  transition: color 0.3s;
+  display: flex; align-items: center; gap: 3px;
+}
+.time-display.urgent { color: #d00; animation: urgentPulse 0.8s ease-in-out infinite; }
+@keyframes urgentPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.time-display.bonus { animation: timeBonusPulse 0.5s ease-out; }
+@keyframes timeBonusPulse {
+  0% { transform: scale(1); color: #2a6b15; }
+  50% { transform: scale(1.35); color: #4caf50; text-shadow: 0 0 8px rgba(76,175,80,0.6); }
+  100% { transform: scale(1); color: #2a6b15; }
+}
+.time-bonus-popup {
+  position: absolute;
+  color: #2a6b15;
+  font-size: 14px; font-weight: 900;
+  text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+  pointer-events: none; z-index: 100;
+  transform: translateX(-50%);
+  animation: timeBonusFloat 1.2s ease-out forwards;
+}
+@keyframes timeBonusFloat {
+  0% { opacity: 0; transform: translateX(-50%) translateY(0); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-28px); }
+}
+
+/* 订单条 */
+.order-row {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.7); border: 2px solid #d4b880;
+  border-radius: 12px; padding: 6px 10px;
+  z-index: 2; min-height: 48px; flex-shrink: 0;
+}
+.order-icon { font-size: 22px; flex-shrink: 0; }
+.order-body { flex: 1; min-width: 0; }
+.order-text {
+  font-size: 12px; font-weight: 700; color: #3d2814; line-height: 1.25;
+  margin-bottom: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.order-timer { height: 5px; background: rgba(0,0,0,0.1); border-radius: 3px; overflow: hidden; }
+.order-timer-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #88d060, #4caf50);
+  transition: width 0.1s linear, background 0.3s;
+}
+.order-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.order-reward { font-size: 12px; font-weight: 900; color: #e89a0d; white-space: nowrap; }
+.order-progress-text { font-size: 10px; color: #6b4528; font-weight: 700; }
+.order-empty {
+  flex: 1; text-align: center;
+  font-size: 12px; color: #8b6914; font-weight: 700;
+  font-style: italic;
+  line-height: 1.4;
+}
+.order-empty.all-done {
+  background: linear-gradient(90deg, rgba(168,217,119,0.3), rgba(136,208,96,0.3));
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: #2a4810;
+  font-style: normal;
+  font-weight: 800;
+}
+
+/* 零件池 */
+.parts-pool {
+  background: #fff; border: 3px solid #3d2814;
+  border-radius: 14px; padding: 6px 9px 9px;
+  box-shadow: 0 4px 0 #3d2814;
+  z-index: 2; flex-shrink: 0;
+}
+.pool-title {
+  font-size: 10px; color: #6b4528; margin-bottom: 5px;
+  font-weight: 700; display: flex; justify-content: space-between;
+}
+.parts-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.part {
+  background: linear-gradient(180deg, #fffbe6 0%, #ffe8a0 50%, #f0c850 100%);
+  border: 2.5px solid #8b6914; border-radius: 9px;
+  height: 40px; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 900; color: #3d2814;
+  cursor: pointer; transition: all 0.1s; user-select: none;
+  box-shadow: 0 3px 0 #8b6914; position: relative;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+.part::after {
+  content: ''; position: absolute;
+  top: 3px; left: 5px; right: 5px; height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+  border-radius: 2px;
+}
+.part:active:not(.disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #8b6914; }
+.part.disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.3); }
+.part.pulse { animation: partPulse 0.4s ease-out; }
+@keyframes partPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.15); filter: brightness(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* 锻造区 */
+.forge-area {
+  flex: 1; display: flex; flex-direction: row;
+  align-items: center; justify-content: center; gap: 8px;
+  position: relative; z-index: 2;
+  min-height: 135px; padding: 4px 0;
+}
+.forge-area::before {
+  content: ''; position: absolute;
+  left: 14%; right: 14%; bottom: 10px;
+  height: 10px;
+  background: radial-gradient(ellipse, rgba(61,40,20,0.18) 0%, transparent 70%);
+  pointer-events: none; z-index: 1;
+}
+.blacksmith {
+  position: relative; width: 72px; height: 85px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; z-index: 3;
+}
+.bean-body {
+  width: 62px; height: 73px;
+  background: radial-gradient(circle at 32% 28%, #b4e862, #7bc43c 55%, #4a8a18);
+  border: 2.5px solid #2a5010;
+  border-radius: 50% 50% 46% 46% / 55% 55% 45% 45%;
+  position: relative;
+  box-shadow: 0 4px 0 #2a5010, 0 7px 10px rgba(0,0,0,0.18),
+    inset -3px -6px 8px rgba(0,0,0,0.12), inset 2px 2px 5px rgba(255,255,255,0.3);
+}
+.bean-body::before {
+  content: ''; position: absolute;
+  bottom: -1px; left: 5px; right: 5px; height: 42%;
+  background: linear-gradient(180deg, #c76a2b, #8b4514);
+  border: 2px solid #5a2d0a; border-top: none;
+  border-radius: 0 0 40% 40% / 0 0 80% 80%;
+}
+.bean-body::after {
+  content: ''; position: absolute;
+  bottom: 18%; left: 50%; transform: translateX(-50%);
+  width: 16px; height: 9px;
+  background: #a8521f; border: 1.5px solid #5a2d0a;
+  border-radius: 0 0 4px 4px;
+}
+.bean-eyes {
+  position: absolute; top: 18px; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 11px; z-index: 3;
+}
+.eye { width: 9px; height: 11px; background: #1a1410; border-radius: 50%; position: relative; }
+.eye::after {
+  content: ''; position: absolute; top: 2px; right: 2px;
+  width: 2.5px; height: 2.5px; background: #fff; border-radius: 50%;
+}
+.bean-mouth {
+  position: absolute; top: 35px; left: 50%; transform: translateX(-50%);
+  width: 12px; height: 6px;
+  border: 2px solid #1a1410; border-top: none;
+  border-radius: 0 0 50% 50%; z-index: 3;
+}
+.bean-cheek {
+  position: absolute; top: 33px;
+  width: 7px; height: 5px;
+  background: #ff9eae; border-radius: 50%;
+  opacity: 0.8; z-index: 2;
+}
+.bean-cheek.left { left: 5px; }
+.bean-cheek.right { right: 5px; }
+
+.hammer {
+  position: absolute; right: -10px; top: 10px;
+  font-size: 28px;
+  transform-origin: 30% 85%;
+  transform: rotate(-20deg);
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,0.4));
+  z-index: 4;
+}
+.hammer.swinging { animation: hammerSwing 0.3s ease-in-out 3; }
+@keyframes hammerSwing {
+  0%, 100% { transform: rotate(-20deg); }
+  30% { transform: rotate(-75deg); }
+  65% { transform: rotate(20deg); }
+}
+
+.anvil-wrapper { position: relative; display: flex; flex-direction: column; align-items: center; }
+
+/* ===== v8: 铁砧整体容器新增（含 + 号） ===== */
+.anvil-slots-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.anvil-plus {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  text-shadow: -1.5px -1.5px 0 #1e4d7a, 1.5px -1.5px 0 #1e4d7a, -1.5px 1.5px 0 #1e4d7a, 1.5px 1.5px 0 #1e4d7a;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+  line-height: 1;
+}
+.anvil-plus.active {
+  animation: plusPulse 1.2s ease-in-out infinite;
+}
+@keyframes plusPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.8; }
+}
+
+.anvil {
+  background: linear-gradient(180deg, #7dc2f0 0%, #4a9ad4 45%, #2c6ea8 100%);
+  border: 3px solid #1e4d7a;
+  border-radius: 12px 12px 5px 5px;
+  box-shadow: 0 4px 0 #1e4d7a, 0 8px 12px rgba(0,0,0,0.22);
+  padding: 7px 9px 8px;
+  position: relative;
+}
+.anvil::before {
+  content: ''; position: absolute;
+  top: 4px; left: 12%; right: 12%; height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+  border-radius: 2px;
+}
+.anvil-base {
+  width: 140px; height: 13px;
+  background: linear-gradient(180deg, #8b4514, #5a2d0a);
+  border: 2.5px solid #3d1c05; border-top: none;
+  border-radius: 0 0 8px 8px;
+  margin-top: -3px;
+  box-shadow: 0 3px 5px rgba(0,0,0,0.28);
+}
+.anvil.shaking { animation: anvilShake 0.2s ease-in-out; }
+@keyframes anvilShake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 1px); }
+  75% { transform: translate(3px, -1px); }
+}
+
+.slot-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.anvil-slot {
+  width: 52px; height: 52px;
+  background: rgba(30,77,122,0.45);
+  border: 2.5px dashed rgba(255,255,255,0.35);
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 900; color: #fff;
+  position: relative; transition: all 0.2s;
+  cursor: default;
+}
+.anvil-slot.filled {
+  background: radial-gradient(circle, #ffdd66 0%, #ff9a2e 55%, #e85c10 100%);
+  border: 3px solid #b03a05; color: #fff;
+  text-shadow: 0 0 6px #ff6b1a, 0 2px 3px rgba(0,0,0,0.3),
+    -1px -1px 0 #b03a05, 1px 1px 0 #b03a05;
+  cursor: pointer;
+  animation: heatGlow 0.9s ease-in-out infinite alternate;
+}
+.anvil-slot.filled:active { transform: scale(0.92); }
+.anvil-slot.filled::before {
+  content: '×'; position: absolute;
+  top: -8px; right: -6px;
+  width: 17px; height: 17px;
+  background: #fff; color: #b03a05;
+  border: 2px solid #b03a05; border-radius: 50%;
+  font-size: 11px; font-weight: 900;
+  line-height: 13px; text-align: center; text-shadow: none;
+}
+@keyframes heatGlow {
+  from { box-shadow: 0 0 10px #ff6b1a, inset 0 0 8px rgba(255,255,255,0.4); }
+  to { box-shadow: 0 0 22px #ffba3a, 0 0 32px #ff6b1a, inset 0 0 14px rgba(255,255,255,0.6); }
+}
+.anvil-slot.forging { animation: forgePulse 0.2s ease-in-out; }
+@keyframes forgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.85); filter: brightness(1.6); }
+}
+
+/* v8: 格位空间标签 */
+.slot-label {
+  font-size: 9px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.95);
+  text-shadow: -1px -1px 0 #1e4d7a, 1px -1px 0 #1e4d7a, -1px 1px 0 #1e4d7a, 1px 1px 0 #1e4d7a;
+  letter-spacing: 1px;
+  line-height: 1;
+  background: rgba(30,77,122,0.55);
+  padding: 1.5px 6px;
+  border-radius: 6px;
+}
+
+.forge-result {
+  position: absolute;
+  font-size: 58px; font-weight: 900;
+  font-family: "STKaiti", "KaiTi", "PingFang SC", serif;
+  color: #fff;
+  text-shadow: 0 0 15px #ff6b1a, 0 0 30px #ffba3a,
+    -2px -2px 0 #b03a05, 2px 2px 0 #b03a05, 0 3px 6px rgba(0,0,0,0.4);
+  opacity: 0; pointer-events: none;
+  z-index: 15; left: 50%; top: 10%;
+  transform: translateX(-50%);
+}
+.forge-result.show { animation: resultShow 1.4s ease-out forwards; }
+@keyframes resultShow {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.3); }
+  15% { opacity: 1; transform: translate(-50%, -8px) scale(1.3); }
+  50% { opacity: 1; transform: translate(-50%, -5px) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, 80px) scale(0.4); }
+}
+.forge-result.failed {
+  color: #fff; font-size: 24px;
+  text-shadow: 0 0 8px #d0353a, -2px -2px 0 #8b1a1f, 2px 2px 0 #8b1a1f;
+}
+.spark {
+  position: absolute;
+  width: 6px; height: 6px;
+  background: radial-gradient(circle, #fff8e0 0%, #ffba3a 60%, transparent);
+  border-radius: 50%;
+  pointer-events: none; z-index: 10;
+  box-shadow: 0 0 4px #ffba3a;
+}
+.score-popup {
+  position: absolute;
+  font-size: 17px; font-weight: 900;
+  color: #e89a0d;
+  text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 3px 5px rgba(0,0,0,0.3);
+  pointer-events: none; z-index: 20;
+  animation: scoreFloat 1.3s ease-out forwards;
+  white-space: nowrap;
+}
+@keyframes scoreFloat {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+  25% { opacity: 1; transform: translate(-50%, -15px) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -50px) scale(0.9); }
+}
+
+/* 里程碑徽章 */
+.tier-unlock {
+  position: absolute;
+  left: 50%; top: 25%;
+  transform: translateX(-50%);
+  font-size: 19px; font-weight: 900;
+  color: #fff;
+  background: linear-gradient(135deg, #ff8c42, #ff5a1f);
+  padding: 8px 18px;
+  border: 3px solid #fff; border-radius: 20px;
+  box-shadow: 0 0 30px rgba(255,140,66,0.7), 0 4px 0 #8b2f0a;
+  pointer-events: none; z-index: 60;
+  animation: tierShow 2.5s ease-out forwards;
+  white-space: nowrap;
+}
+.tier-unlock.purple {
+  background: linear-gradient(135deg, #b47eff, #6b3dd9);
+  box-shadow: 0 0 40px rgba(180,126,255,0.85), 0 4px 0 #4a2d94;
+}
+.tier-unlock.perfect {
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c42 45%, #b47eff 100%);
+  box-shadow: 0 0 60px rgba(255,215,0,0.9), 0 4px 0 #8b5a00;
+  animation: tierShow 3s ease-out forwards, perfectShimmer 2s linear infinite;
+}
+@keyframes tierShow {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(0.3); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1.2); }
+  35% { transform: translate(-50%, 0) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -30px) scale(0.95); }
+}
+@keyframes perfectShimmer {
+  0%, 100% { filter: hue-rotate(0); }
+  50% { filter: hue-rotate(30deg); }
+}
+.screen-star {
+  position: absolute;
+  font-size: 24px;
+  pointer-events: none; z-index: 55;
+  filter: drop-shadow(0 0 8px rgba(255,215,0,0.8));
+}
+.screen-crown {
+  position: absolute;
+  font-size: 60px;
+  pointer-events: none; z-index: 58;
+  filter: drop-shadow(0 0 20px rgba(255,215,0,0.9));
+}
+
+/* 字库图鉴 */
+.library-card {
+  background: #fff; border: 3px solid #3d2814;
+  border-radius: 14px; box-shadow: 0 4px 0 #3d2814;
+  padding: 7px 10px 8px;
+  z-index: 2; flex-shrink: 0;
+}
+.lib-header-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; font-weight: 900; color: #3d2814;
+  padding: 0 2px 5px;
+}
+.lib-count { color: #6b4528; }
+.lib-score-stars {
+  color: #e89a0d; font-size: 13px;
+  display: flex; align-items: center; gap: 4px;
+}
+.lib-tier-bar { position: relative; height: 30px; margin: 2px 6px 4px; }
+.lib-tier-track {
+  position: absolute; left: 0; right: 0; top: 11px;
+  height: 5px;
+  background: rgba(212,184,128,0.4); border-radius: 3px;
+  overflow: hidden;
+}
+.lib-tier-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffbd4a, #ff8c42);
+  border-radius: 3px; width: 0%;
+  transition: width 0.6s cubic-bezier(.34,1.56,.64,1);
+}
+.lib-tier-fill.purple { background: linear-gradient(90deg, #ffbd4a, #ff8c42, #b47eff); }
+.lib-tier-markers { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
+.lib-tier-marker {
+  position: absolute; top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; line-height: 1;
+}
+.lib-tier-marker .marker-dot {
+  width: 13px; height: 13px;
+  background: #fff; border: 2px solid #b8a070;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+.lib-tier-marker.reached .marker-dot {
+  background: #ffc72e; border-color: #8b5a00;
+  box-shadow: 0 0 6px rgba(255,199,46,0.7);
+}
+.lib-tier-marker.special.reached .marker-dot {
+  background: linear-gradient(135deg, #d4a3ff, #8b5ad4);
+  border-color: #4a2d7a;
+  box-shadow: 0 0 8px rgba(180,126,255,0.8);
+}
+.lib-tier-marker .marker-label {
+  font-size: 8px; font-weight: 900;
+  color: #8b6914; margin-top: 2px;
+  white-space: nowrap;
+}
+.lib-tier-marker.reached .marker-label { color: #b03a05; }
+.lib-tier-marker.special.reached .marker-label { color: #6b3dd9; }
+
+.library-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+.char-cell {
+  aspect-ratio: 1.05 / 1;
+  background: rgba(255,244,214,0.5);
+  border: 2px dashed #c8a870;
+  border-radius: 7px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #b8a070; transition: all 0.3s;
+  position: relative; overflow: hidden;
+}
+.char-cell .char {
+  font-size: 17px; font-weight: 900;
+  font-family: "STKaiti", "KaiTi", serif; line-height: 1;
+}
+.char-cell .pinyin {
+  font-size: 8.5px; line-height: 1.1; margin-top: 1px;
+  font-weight: 600; letter-spacing: -0.2px;
+  color: #b8a070;
+}
+.char-cell.discovered {
+  background: linear-gradient(180deg, #d8f0b8 0%, #a5dd6e 100%);
+  border: 2px solid #2a6b15; color: #1e4d0c;
+  box-shadow: 0 2px 0 #2a6b15;
+}
+.char-cell.discovered .pinyin { color: #2a4810; }
+.char-cell.just-unlocked { animation: unlockFanfare 0.7s cubic-bezier(.34,1.56,.64,1); }
+@keyframes unlockFanfare {
+  0% { transform: scale(0.4) rotate(-12deg); opacity: 0.3; }
+  50% { transform: scale(1.4) rotate(7deg); box-shadow: 0 0 24px rgba(136,208,96,0.9); }
+  100% { transform: scale(1) rotate(0); box-shadow: 0 2px 0 #2a6b15; }
+}
+
+/* 底栏 */
+.bottom-bar { display: flex; gap: 7px; z-index: 2; flex-shrink: 0; }
+.hint-btn, .end-btn, .restart-btn {
+  flex: 1; border: 2.5px solid #3d2814; color: #fff;
+  padding: 0; border-radius: 11px;
+  font-size: 12px; font-weight: 900;
+  cursor: pointer; box-shadow: 0 3px 0 #3d2814;
+  font-family: inherit;
+  height: 38px;
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+}
+.hint-btn { background: linear-gradient(180deg, #ffbd4a, #ff8c42); }
+.hint-btn.share-mode { background: linear-gradient(180deg, #4fc3f7, #0288d1); }
+.end-btn { background: linear-gradient(180deg, #b47eff, #8b5ad4); }
+.restart-btn {
+  background: linear-gradient(180deg, #a3d977, #88c050);
+  flex: 0 0 48px; font-size: 15px;
+}
+.hint-btn:active, .end-btn:active, .restart-btn:active {
+  transform: translateY(2px); box-shadow: 0 1px 0 #3d2814;
+}
+
+/* 提示气泡 */
+.hint-bubble {
+  position: absolute; top: 42%; left: 50%;
+  transform: translateX(-50%);
+  background: #fff; color: #3d2814;
+  padding: 9px 16px; border-radius: 14px;
+  font-size: 14px; font-weight: 800;
+  border: 3px solid #3d2814; box-shadow: 0 4px 0 #3d2814;
+  animation: hintShow 3s ease-out forwards;
+  z-index: 50; pointer-events: none;
+  max-width: 85%; text-align: center; line-height: 1.4;
+  white-space: pre-line;
+}
+@keyframes hintShow {
+  0% { opacity: 0; transform: translateX(-50%) translateY(20px) scale(0.8); }
+  10%, 85% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.95); }
+}
+
+/* 弹窗 */
+.modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center; align-items: center;
+  z-index: 1000; padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #fff; border: 4px solid #3d2814;
+  border-radius: 20px; padding: 20px 18px 18px;
+  max-width: 340px; width: 100%;
+  color: #3d2814;
+  box-shadow: 0 6px 0 #3d2814;
+  max-height: 92%; overflow-y: auto;
+}
+.start-content { text-align: center; }
+.start-level-tag {
+  display: inline-block; background: #ffbd4a;
+  color: #3d2814; font-size: 10px; font-weight: 900;
+  padding: 3px 10px; border-radius: 10px;
+  margin-bottom: 8px;
+}
+.start-level-name {
+  font-size: 22px; font-weight: 900; color: #3d2814;
+  margin-bottom: 10px;
+  font-family: "STKaiti", "KaiTi", serif;
+}
+.start-info {
+  font-size: 13px; color: #6b4528;
+  margin-bottom: 10px; line-height: 1.5;
+}
+.start-info b { color: #e89a0d; font-size: 16px; }
+.start-time-tip {
+  background: linear-gradient(90deg, #d8f0b8, #c4f298);
+  border: 2px solid #2a6b15; border-radius: 10px;
+  padding: 8px 12px; font-size: 12px;
+  font-weight: 700; color: #2a4810;
+  margin-bottom: 10px; line-height: 1.5;
+}
+.start-rule-tip {
+  background: #fff0d5;
+  border: 2px dashed #b03a05;
+  border-radius: 10px;
+  padding: 7px 12px; font-size: 11.5px;
+  color: #3d2814; font-weight: 700;
+  margin-bottom: 10px; line-height: 1.5;
+  text-align: left;
+}
+.start-rule-tip b { color: #b03a05; }
+.start-tiers {
+  background: #fff4d6; border: 2.5px solid #d4b880;
+  border-radius: 12px; padding: 9px 12px;
+  margin-bottom: 10px; text-align: left;
+}
+.start-tier {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 2px 0; font-size: 12px; font-weight: 700;
+}
+.start-tier:not(:last-child) { border-bottom: 1px dashed rgba(139,105,20,0.2); }
+.start-tier .tier-stars-col { font-size: 13px; width: 70px; }
+.start-tier.special .tier-stars-col { color: #6b3dd9; }
+.start-tier.perfect .tier-stars-col { color: #b03a05; }
+.start-note {
+  font-size: 11px; color: #8b6914;
+  margin-bottom: 10px; font-style: italic;
+}
+
+.end-content { text-align: center; }
+.end-stars { font-size: 30px; margin-bottom: 2px; letter-spacing: 3px; }
+.end-stars.rainbow {
+  background: linear-gradient(90deg, #ff5555, #ffc72e, #88d060, #4a9ad4, #b47eff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rainbowShift 3s linear infinite;
+}
+@keyframes rainbowShift {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+.end-tier-label {
+  font-size: 19px; font-weight: 900; color: #e89a0d;
+  margin-bottom: 6px; text-shadow: 0 2px 0 rgba(0,0,0,0.1);
+}
+.end-tier-label.purple { color: #6b3dd9; }
+.end-tier-label.perfect {
+  background: linear-gradient(90deg, #ff8c42, #ffc72e, #b47eff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.end-stats-grid {
+  background: #fff4d6; border: 2.5px solid #3d2814;
+  border-radius: 11px; padding: 10px 14px;
+  margin: 10px 0;
+  line-height: 1.8; font-size: 13px; text-align: left;
+}
+.end-stats-grid b { color: #e89a0d; font-size: 15px; }
+.reveal-section { margin-top: 10px; text-align: left; }
+.reveal-title {
+  font-size: 12px; font-weight: 900;
+  color: #6b4528; margin-bottom: 5px;
+  padding-bottom: 3px;
+  border-bottom: 2px dashed #c8a870;
+}
+.reveal-chars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.reveal-char {
+  background: rgba(255,244,214,0.6);
+  border: 1.5px solid #c8a870;
+  border-radius: 7px;
+  padding: 4px 5px;
+  text-align: center;
+}
+.reveal-char-top { display: flex; align-items: baseline; justify-content: center; gap: 3px; }
+.rc-char {
+  font-size: 18px; font-weight: 900;
+  font-family: "STKaiti", "KaiTi", serif; color: #b03a05;
+}
+.rc-py { font-size: 9px; color: #6b4528; font-weight: 600; }
+.reveal-char-parts {
+  font-size: 10px; color: #6b4528;
+  font-weight: 700; margin-top: 1px;
+}
+.reveal-orders { display: flex; flex-direction: column; gap: 4px; }
+.reveal-order {
+  background: rgba(255,244,214,0.6);
+  border: 1.5px solid #c8a870;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 11px; line-height: 1.3;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px;
+}
+.reveal-order .ro-emoji { font-size: 14px; }
+.reveal-order .ro-hint { color: #6b4528; flex: 1; min-width: 0; }
+.reveal-order .ro-answer { color: #b03a05; font-weight: 900; }
+
+.end-buttons {
+  display: flex; gap: 10px;
+  justify-content: center; flex-wrap: wrap;
+  margin-top: 10px;
+}
+.close-btn {
+  background: linear-gradient(180deg, #ffbd4a, #ff8c42);
+  border: 3px solid #3d2814; color: #fff;
+  padding: 10px 22px;
+  border-radius: 12px;
+  font-size: 13px; font-weight: 900;
+  cursor: pointer; box-shadow: 0 3px 0 #3d2814;
+  font-family: inherit;
+}
+.close-btn.secondary { background: linear-gradient(180deg, #a3d977, #88c050); }
+.close-btn.big { padding: 12px 36px; font-size: 15px; }
+.close-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #3d2814; }
+</style>
+</head>
+<body>
+<div id="phone-shell">
+  <div id="game">
+
+    <div class="top-bar">
+      <div class="score-display">🏆 <span id="score-amount">0</span><span style="font-size:11px;color:#6b4528;">分</span></div>
+      <div class="level-display" id="level-name">🏗️ 第一关·初入铁匠铺</div>
+      <div class="time-display" id="time-display">⏱ 02:00</div>
+    </div>
+
+    <div class="order-row" id="order-row"></div>
+
+    <div class="parts-pool">
+      <div class="pool-title">
+        <span>⚒️ 零件池</span>
+        <span style="opacity:0.7;">点零件放铁砧 · 点铁砧×取回</span>
+      </div>
+      <div class="parts-grid" id="parts-grid"></div>
+    </div>
+
+    <div class="forge-area" id="forge-area">
+      <div class="blacksmith">
+        <div class="bean-body">
+          <div class="bean-cheek left"></div>
+          <div class="bean-cheek right"></div>
+          <div class="bean-eyes"><div class="eye"></div><div class="eye"></div></div>
+          <div class="bean-mouth"></div>
+        </div>
+        <div class="hammer" id="hammer">🔨</div>
+      </div>
+      <div class="anvil-wrapper">
+        <div class="anvil" id="anvil">
+          <div class="anvil-slots-row">
+            <div class="slot-unit">
+              <div class="anvil-slot" id="slot-0" onclick="removeFromAnvil(0)"></div>
+              <div class="slot-label">左/上</div>
+            </div>
+            <div class="anvil-plus" id="anvil-plus">＋</div>
+            <div class="slot-unit">
+              <div class="anvil-slot" id="slot-1" onclick="removeFromAnvil(1)"></div>
+              <div class="slot-label">右/下</div>
+            </div>
+          </div>
+        </div>
+        <div class="anvil-base"></div>
+      </div>
+    </div>
+
+    <div class="library-card">
+      <div class="lib-header-row">
+        <span>📚 汉字图鉴</span>
+        <span class="lib-count" id="library-count">0 / 26</span>
+        <span class="lib-score-stars" id="lib-stars">☆☆☆ 0分</span>
+      </div>
+      <div class="lib-tier-bar">
+        <div class="lib-tier-track"><div class="lib-tier-fill" id="lib-tier-fill"></div></div>
+        <div class="lib-tier-markers" id="lib-tier-markers"></div>
+      </div>
+      <div class="library-grid" id="library-grid"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <button class="hint-btn" onclick="useHint()" id="hint-btn">💡 提示 3</button>
+      <button class="end-btn" onclick="endLevel()">🏁 收工</button>
+      <button class="restart-btn" onclick="resetGame()" title="重开">🔄</button>
+    </div>
+
+    <div class="modal-overlay show" id="start-modal">
+      <div class="modal">
+        <div class="start-content">
+          <div class="start-level-tag">第 1 关 · 普通关卡</div>
+          <div class="start-level-name">🏗️ 初入铁匠铺</div>
+          <div class="start-info">本关可组成 <b>26</b> 个汉字<br>村民会带来 <b id="start-order-count">6</b> 个订单</div>
+          <div class="start-rule-tip">
+            📐 <b>顺序很重要</b>：左格放左/上部件，右格放右/下部件<br>
+            比如"清" = <b>氵</b>（左） + <b>青</b>（右）
+          </div>
+          <div class="start-time-tip">
+            ⏱ 基础时间 <b id="start-base-time">120</b> 秒<br>
+            ✨ 每打出新字 <b>+10s</b>、完成订单 <b>+20~30s</b>
+          </div>
+          <div class="start-tiers">
+            <div class="start-tier"><span class="tier-stars-col">⭐</span><span>60分 · 合格</span></div>
+            <div class="start-tier"><span class="tier-stars-col">⭐⭐</span><span>140分 · 优秀</span></div>
+            <div class="start-tier"><span class="tier-stars-col">⭐⭐⭐</span><span>220分 · 大师</span></div>
+            <div class="start-tier special"><span class="tier-stars-col">💜⭐⭐⭐</span><span>280分 · 炫彩大师</span></div>
+            <div class="start-tier perfect"><span class="tier-stars-col">👑</span><span>26字+5订单 · 完美大师</span></div>
+          </div>
+          <div class="start-note">完成 3 个普通关卡解锁挑战关 🔓</div>
+          <button class="close-btn big" onclick="startGame()">🔨 开始打铁</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="end-modal">
+      <div class="modal"><div class="end-content" id="end-content"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ==================== CONFIG ====================
+const CONFIG = {
+  BASE_TIME: 120,
+  TIME_PER_NEW_CHAR: 10,
+  TIME_PER_ORDER_SINGLE: 20,
+  TIME_PER_ORDER_FAMILY: 30,
+  URGENT_THRESHOLD: 10,
+  TICK_THRESHOLD: 5,
+
+  SCORE_NEW: 10,
+  SCORE_REPEAT: 0,
+  SCORE_ORDER_SINGLE: 15,
+  SCORE_ORDER_FAMILY: 30,
+  TIER_1: 60,
+  TIER_2: 140,
+  TIER_3: 220,
+  TIER_PURPLE: 280,
+  PERFECT_ORDERS: 5,
+
+  ORDER_POOL_SIZE_FN: (charCount) => {
+    if (charCount <= 15) return 4;
+    if (charCount <= 25) return 6;
+    if (charCount <= 40) return 8;
+    return 10;
+  },
+  ORDER_FAMILY_RATIO: 1/3,
+  SINGLE_TARGET_RATIO: 1/5,
+  ORDER_RESPAWN_DELAY: 1500,
+
+  ORDER_DURATION: 45000,
+  HINT_USES: 3,
+  SHARE_BONUS_HINTS: 2,
+  FORGE_HAMMER_COUNT: 3,
+  HAMMER_INTERVAL: 280,
+  FORGE_RESOLVE_DELAY: 900,
+  TIER_BAR_MAX: 280,
+};
+
+// ==================== 零件 ====================
+const PARTS = ['氵','讠','女','日','月','目','青','口','马','子','木','小','大','也'];
+
+// ==================== 主字库 (v8: 严格顺序 + 结构) ====================
+// parts 数组顺序 = 空间顺序（左→右 或 上→下）
+// structure: 'left-right' 或 'top-bottom'
+// 叠字（两部件相同）在 lookupChar 中自动双向命中
+const CHAR_LIB = [
+  // 青族（全部左右结构，青在右）
+  { char:'清', py:'qīng', parts:['氵','青'], structure:'left-right' },
+  { char:'请', py:'qǐng', parts:['讠','青'], structure:'left-right' },
+  { char:'晴', py:'qíng', parts:['日','青'], structure:'left-right' },
+  { char:'睛', py:'jīng', parts:['目','青'], structure:'left-right' },
+  { char:'婧', py:'jìng', parts:['女','青'], structure:'left-right' },  // v8新增
+
+  // 明/昌/朋/昊系
+  { char:'明', py:'míng', parts:['日','月'], structure:'left-right' },
+  { char:'昌', py:'chāng', parts:['日','日'], structure:'top-bottom' },
+  { char:'朋', py:'péng', parts:['月','月'], structure:'left-right' },
+
+  // 女族（女在左）
+  { char:'好', py:'hǎo', parts:['女','子'], structure:'left-right' },
+  { char:'妈', py:'mā', parts:['女','马'], structure:'left-right' },
+  { char:'她', py:'tā', parts:['女','也'], structure:'left-right' },
+  { char:'如', py:'rú', parts:['女','口'], structure:'left-right' },
+
+  // 口族
+  { char:'吗', py:'ma', parts:['口','马'], structure:'left-right' },
+  { char:'吕', py:'lǚ', parts:['口','口'], structure:'top-bottom' },
+
+  // 木族（以及呆/杏/杳/杲区分）
+  { char:'李', py:'lǐ', parts:['木','子'], structure:'top-bottom' },
+  { char:'林', py:'lín', parts:['木','木'], structure:'left-right' },
+  { char:'相', py:'xiāng', parts:['木','目'], structure:'left-right' },
+  { char:'呆', py:'dāi', parts:['口','木'], structure:'top-bottom' },   // 口上木下
+  { char:'杏', py:'xìng', parts:['木','口'], structure:'top-bottom' },  // 木上口下
+  { char:'杳', py:'yǎo', parts:['木','日'], structure:'top-bottom' },   // v9新增：木上日下
+  { char:'杲', py:'gǎo', parts:['日','木'], structure:'top-bottom' },   // v9新增：日上木下
+
+  // 水族（氵在左）
+  { char:'沐', py:'mù', parts:['氵','木'], structure:'left-right' },
+  { char:'池', py:'chí', parts:['氵','也'], structure:'left-right' },
+  { char:'汝', py:'rǔ', parts:['氵','女'], structure:'left-right' },
+
+  // 马族
+  { char:'驰', py:'chí', parts:['马','也'], structure:'left-right' },
+
+  // 其他
+  { char:'尖', py:'jiān', parts:['小','大'], structure:'top-bottom' },
+];
+const LIBRARY_CHARS = CHAR_LIB.map(e => e.char);
+const CHAR_MAP = Object.fromEntries(CHAR_LIB.map(e => [e.char, e]));
+
+/**
+ * v8: 严格顺序判定函数
+ * p1 = 铁砧左格（对应部件1，左/上位置）
+ * p2 = 铁砧右格（对应部件2，右/下位置）
+ * 
+ * 匹配规则：
+ * 1. 优先严格匹配 parts[0]==p1 && parts[1]==p2
+ * 2. 如果字是叠字（parts[0]==parts[1]），那么 p1==p2==parts[0] 也命中
+ * 3. 除此之外，顺序错误（比如木+口 vs 口+木）不命中，返回null
+ */
+function lookupChar(p1, p2) {
+  return CHAR_LIB.find(e => {
+    const [a, b] = e.parts;
+    // 叠字：两部件相同，玩家顺序无所谓
+    if (a === b) return p1 === a && p2 === b;
+    // 非叠字：严格按位置匹配
+    return a === p1 && b === p2;
+  }) || null;
+}
+
+// ==================== 订单模板 ====================
+const ORDER_SINGLE = [
+  { target:'清', emoji:'🐠', hint:'小溪的水真__啊，连鱼都看得见！' },
+  { target:'请', emoji:'🙇', hint:'做客第一句话，这个字开头才有礼貌' },
+  { target:'晴', emoji:'☀️', hint:'万里无云的好天气：__朗' },
+  { target:'睛', emoji:'👀', hint:'睁开你水汪汪的大眼__' },
+  { target:'婧', emoji:'💐', hint:'女孩名字常用的字，文文静静、美美好好' },  // v8新增
+  { target:'明', emoji:'🌗', hint:'日+月合一起，天就__亮了' },
+  { target:'好', emoji:'🤗', hint:'女娃娃加小男孩，多__看' },
+  { target:'妈', emoji:'👩', hint:'最爱你的那个人' },
+  { target:'吗', emoji:'❔', hint:'"你吃饭了__？"问句末尾' },
+  { target:'她', emoji:'🧒', hint:'那个小女生，叫__' },
+  { target:'如', emoji:'🤝', hint:'兄弟好得__同一家人' },
+  { target:'吕', emoji:'🎼', hint:'两个口叠起来，是个姓氏' },
+  { target:'李', emoji:'🍑', hint:'好吃的水果，也是大姓' },
+  { target:'林', emoji:'🌲', hint:'一大片的树，就变成__' },
+  { target:'朋', emoji:'👬', hint:'两个月亮交上__友' },
+  { target:'呆', emoji:'😵', hint:'嘴大张眼瞪，好__' },
+  { target:'杏', emoji:'🟡', hint:'黄黄的水果，银__树' },
+  { target:'杳', emoji:'🌫️', hint:'消失得无影无踪：__无音信' },
+  { target:'杲', emoji:'🌅', hint:'太阳高挂在树梢，明亮的样子' },
+  { target:'相', emoji:'🏛️', hint:'古代的大官叫"宰__"' },
+  { target:'尖', emoji:'📌', hint:'上小下大，磨得真__锐' },
+  { target:'沐', emoji:'🛁', hint:'用水洗洗，叫__浴' },
+  { target:'池', emoji:'🐟', hint:'有水有鱼：游泳__' },
+  { target:'昌', emoji:'📈', hint:'两个太阳，生意兴__' },
+  { target:'汝', emoji:'🧓', hint:'文言里"你"叫__，如"__心安否"' },
+  { target:'驰', emoji:'🏎️', hint:'马儿飞奔叫奔__' },
+];
+
+const ORDER_FAMILY = [
+  { radical:'氵', count:3, eligible:['清','沐','池','汝'], emoji:'🥤', hint:'渴死啦！3个带"氵"的字' },
+  { radical:'青', count:3, eligible:['清','晴','睛','请','婧'], emoji:'🌱', hint:'春天来啦！3个带"青"的字' },
+  { radical:'女', count:3, eligible:['好','妈','她','如','汝','婧'], emoji:'👭', hint:'村里都是女生！3个带"女"的字' },
+  { radical:'木', count:3, eligible:['李','林','相','沐','呆','杏','杳','杲'], emoji:'🌳', hint:'种树节！3个带"木"的字' },
+  { radical:'日', count:3, eligible:['晴','明','昌','杳','杲'], emoji:'☀️', hint:'太阳公公！3个带"日"的字' },
+  { radical:'目', count:3, eligible:['睛','相'], emoji:'👁️', hint:'仔细看！2个带"目"的字也行', count:2 },
+  { radical:'口', count:3, eligible:['吗','吕','如','呆','杏'], emoji:'🗣️', hint:'张嘴说话！3个带"口"的字' },
+  { radical:'马', count:3, eligible:['妈','吗','驰'], emoji:'🐴', hint:'策马奔驰！3个带"马"的字' },
+  { radical:'也', count:3, eligible:['她','池','驰'], emoji:'🌀', hint:'"也"字小助手！3个带"也"的字' },
+];
+// 修正目族（v8：只有睛、相两个目字，改count为2）
+ORDER_FAMILY.forEach(f => {
+  if (f.radical === '目') { f.count = 2; f.hint = '仔细看！2个带"目"的字'; }
+});
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function generateOrderPool() {
+  const total = CONFIG.ORDER_POOL_SIZE_FN(LIBRARY_CHARS.length);
+  const familyCount = Math.max(1, Math.floor(total * CONFIG.ORDER_FAMILY_RATIO));
+  const singleCount = total - familyCount;
+
+  const shuffledFamily = shuffle(ORDER_FAMILY);
+  const families = shuffledFamily.slice(0, familyCount).map(o => ({
+    ...o, type: 'family', reward: CONFIG.SCORE_ORDER_FAMILY
+  }));
+
+  const familyCovered = new Set();
+  families.forEach(f => f.eligible.forEach(c => familyCovered.add(c)));
+
+  const notCovered = ORDER_SINGLE.filter(o => !familyCovered.has(o.target));
+  const covered = ORDER_SINGLE.filter(o => familyCovered.has(o.target));
+  const singleCandidates = [...shuffle(notCovered), ...shuffle(covered)];
+  const singles = singleCandidates.slice(0, singleCount).map(o => ({
+    ...o, type: 'single', reward: CONFIG.SCORE_ORDER_SINGLE
+  }));
+
+  return shuffle([...families, ...singles]);
+}
+
+// ==================== 状态 ====================
+let state = {};
+let sessionId = 0;
+let orderInterval = null;
+let timeInterval = null;
+let gameStarted = false;
+let gameEnded = false;
+
+function initState() {
+  sessionId++;
+  if (orderInterval) { clearInterval(orderInterval); orderInterval = null; }
+  if (timeInterval) { clearInterval(timeInterval); timeInterval = null; }
+  const orderPool = generateOrderPool();
+  state = {
+    score: 0,
+    timeLeft: CONFIG.BASE_TIME,
+    anvil: [null, null],
+    forgedChars: {},
+    currentOrder: null,
+    orderPool: orderPool,
+    orderIndex: 0,
+    orderHistory: [],
+    ordersCompleted: 0,
+    hintsLeft: CONFIG.HINT_USES,
+    sharedForHint: false,
+    isForging: false,
+    justUnlocked: null,
+    maxTier: 0,
+    mySessionId: sessionId,
+  };
+}
+
+// ==================== 音效 ====================
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
+  return audioCtx;
+}
+function playTone(freq, dur, type='sine', vol=0.2) {
+  const ctx = getAudio();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type; osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + dur);
+}
+function sndPickup() { playTone(800, 0.06, 'triangle', 0.12); }
+function sndPutback() { playTone(500, 0.08, 'triangle', 0.12); }
+function sndHammer() { playTone(1400, 0.04, 'square', 0.15); setTimeout(() => playTone(500, 0.12, 'triangle', 0.12), 35); }
+function sndSuccess() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => playTone(f, 0.16, 'sine', 0.18), i * 55)); }
+function sndFail() { playTone(180, 0.18, 'sawtooth', 0.18); setTimeout(() => playTone(130, 0.22, 'sawtooth', 0.13), 70); }
+function sndOrderDone() { [784, 988, 1175, 1568, 1976].forEach((f, i) => setTimeout(() => playTone(f, 0.14, 'triangle', 0.17), i * 70)); }
+function sndTierUp() { [523, 784, 1047, 1319, 1568].forEach((f, i) => setTimeout(() => playTone(f, 0.18, 'sine', 0.22), i * 90)); }
+function sndTick() { playTone(1200, 0.04, 'square', 0.15); }
+
+// ==================== 核心逻辑 ====================
+function init() {
+  initState();
+  gameStarted = false;
+  gameEnded = false;
+  document.getElementById('start-base-time').textContent = CONFIG.BASE_TIME;
+  document.getElementById('start-order-count').textContent = state.orderPool.length;
+  document.getElementById('time-display').textContent = `⏱ ${formatTime(CONFIG.BASE_TIME)}`;
+  document.getElementById('time-display').classList.remove('urgent');
+  renderAll();
+  document.getElementById('start-modal').classList.add('show');
+}
+
+function startGame() {
+  document.getElementById('start-modal').classList.remove('show');
+  gameStarted = true;
+  startCountdown();
+  const sid = state.mySessionId;
+  setTimeout(() => { if (sid === state.mySessionId) nextOrder(); }, 600);
+}
+
+function startCountdown() {
+  if (timeInterval) clearInterval(timeInterval);
+  const sid = state.mySessionId;
+  timeInterval = setInterval(() => {
+    if (sid !== state.mySessionId) { clearInterval(timeInterval); return; }
+    state.timeLeft -= 1;
+    renderTime();
+    if (state.timeLeft <= CONFIG.TICK_THRESHOLD && state.timeLeft > 0) sndTick();
+    if (state.timeLeft <= 0) {
+      clearInterval(timeInterval);
+      waitAndTimeOut();
+    }
+  }, 1000);
+}
+
+function waitAndTimeOut() {
+  if (state.isForging) { setTimeout(waitAndTimeOut, 200); return; }
+  timeOutEnd();
+}
+
+function timeOutEnd() {
+  if (gameEnded) return;
+  gameEnded = true;
+  if (orderInterval) { clearInterval(orderInterval); orderInterval = null; }
+  showEndModal(true);
+}
+
+function addTime(seconds) {
+  state.timeLeft += seconds;
+  if (state.timeLeft > CONFIG.URGENT_THRESHOLD) {
+    document.getElementById('time-display').classList.remove('urgent');
+  }
+  renderTime();
+  showTimeBonus(seconds);
+}
+
+function showTimeBonus(seconds) {
+  const timeEl = document.getElementById('time-display');
+  timeEl.classList.remove('bonus');
+  void timeEl.offsetWidth;
+  timeEl.classList.add('bonus');
+  setTimeout(() => timeEl.classList.remove('bonus'), 500);
+
+  const rect = timeEl.getBoundingClientRect();
+  const gameEl = document.getElementById('game');
+  const gameRect = gameEl.getBoundingClientRect();
+  const popup = document.createElement('div');
+  popup.className = 'time-bonus-popup';
+  popup.textContent = `+${seconds}s`;
+  popup.style.left = (rect.left - gameRect.left + rect.width/2) + 'px';
+  popup.style.top = (rect.top - gameRect.top + rect.height + 2) + 'px';
+  gameEl.appendChild(popup);
+  setTimeout(() => popup.remove(), 1200);
+}
+
+// ==================== 玩家操作 ====================
+function pickPart(partIdx) {
+  if (!gameStarted || gameEnded || state.isForging) return;
+  if (state.anvil.every(s => s !== null)) {
+    showHintBubble('铁砧满啦～先打一次字');
+    return;
+  }
+  const part = PARTS[partIdx];
+  const anvilSlot = state.anvil.findIndex(s => s === null);
+  state.anvil[anvilSlot] = part;
+  sndPickup();
+  pulsePart(partIdx);
+  renderAnvil();
+  renderPool();
+
+  if (state.anvil.every(s => s !== null)) {
+    const sid = state.mySessionId;
+    setTimeout(() => startForge(sid), 350);
+  }
+}
+
+function removeFromAnvil(slotIdx) {
+  if (!gameStarted || gameEnded || state.isForging) return;
+  if (!state.anvil[slotIdx]) return;
+  state.anvil[slotIdx] = null;
+  sndPutback();
+  renderAnvil();
+  renderPool();
+}
+
+function pulsePart(partIdx) {
+  const el = document.querySelector(`[data-part-idx="${partIdx}"]`);
+  if (!el) return;
+  el.classList.remove('pulse');
+  void el.offsetWidth;
+  el.classList.add('pulse');
+}
+
+function startForge(sid) {
+  if (sid !== state.mySessionId || state.isForging) return;
+  state.isForging = true;
+  renderPool();
+
+  const [a, b] = state.anvil;
+  const entry = lookupChar(a, b);
+
+  const hammer = document.getElementById('hammer');
+  hammer.classList.remove('swinging');
+  void hammer.offsetWidth;
+  hammer.classList.add('swinging');
+
+  for (let i = 0; i < CONFIG.FORGE_HAMMER_COUNT; i++) {
+    setTimeout(() => {
+      if (sid !== state.mySessionId) return;
+      sndHammer();
+      const anvil = document.getElementById('anvil');
+      anvil.classList.remove('shaking');
+      void anvil.offsetWidth;
+      anvil.classList.add('shaking');
+      ['slot-0','slot-1'].forEach(id => {
+        const s = document.getElementById(id);
+        s.classList.remove('forging');
+        void s.offsetWidth;
+        s.classList.add('forging');
+      });
+      spawnSparks();
+    }, i * CONFIG.HAMMER_INTERVAL);
+  }
+
+  setTimeout(() => {
+    if (sid !== state.mySessionId) return;
+    hammer.classList.remove('swinging');
+    resolveForge(entry, sid);
+  }, CONFIG.FORGE_RESOLVE_DELAY);
+}
+
+function resolveForge(entry, sid) {
+  if (sid !== state.mySessionId) return;
+
+  if (entry) {
+    const char = entry.char;
+    const count = state.forgedChars[char] || 0;
+    let score = CONFIG.SCORE_REPEAT;
+    if (count === 0) {
+      score = CONFIG.SCORE_NEW;
+      state.justUnlocked = char;
+      addTime(CONFIG.TIME_PER_NEW_CHAR);
+    }
+    state.forgedChars[char] = count + 1;
+    state.score += score;
+    sndSuccess();
+    showForgeResult(char, score);
+
+    if (count === 0) {
+      checkOrder(char);
+      checkTier();
+    }
+    state.anvil = [null, null];
+  } else {
+    sndFail();
+    showForgeResult('不是字呀！', 0, true);
+    state.anvil = [null, null];
+  }
+
+  state.isForging = false;
+  renderAll();
+}
+
+function showForgeResult(char, score, failed=false) {
+  const area = document.getElementById('forge-area');
+  const el = document.createElement('div');
+  el.className = 'forge-result show';
+  if (failed) el.classList.add('failed');
+  el.textContent = char;
+  area.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+
+  if (score > 0) {
+    const g = document.createElement('div');
+    g.className = 'score-popup';
+    g.textContent = `+${score}分`;
+    g.style.left = '50%'; g.style.top = '55%';
+    g.style.transform = 'translateX(-50%)';
+    area.appendChild(g);
+    setTimeout(() => g.remove(), 1300);
+  }
+}
+
+function spawnSparks() {
+  const anvil = document.querySelector('.anvil');
+  const rect = anvil.getBoundingClientRect();
+  const parent = document.getElementById('forge-area');
+  const parentRect = parent.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2 - parentRect.left;
+  const cy = rect.top - parentRect.top + 10;
+
+  for (let i = 0; i < 6; i++) {
+    const s = document.createElement('div');
+    s.className = 'spark';
+    s.style.left = cx + 'px';
+    s.style.top = cy + 'px';
+    const angle = Math.random() * Math.PI - Math.PI;
+    const dist = 30 + Math.random() * 50;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist - 12;
+    s.animate([
+      { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.15)`, opacity: 0 }
+    ], { duration: 500 + Math.random() * 200, easing: 'cubic-bezier(.4,0,.6,1)' });
+    parent.appendChild(s);
+    setTimeout(() => s.remove(), 720);
+  }
+}
+
+// ==================== 订单 ====================
+function checkOrder(char) {
+  if (!state.currentOrder) return;
+  const o = state.currentOrder;
+  let completed = false;
+  if (o.type === 'single' && o.target === char) completed = true;
+  else if (o.type === 'family') {
+    const have = o.eligible.filter(c => state.forgedChars[c]).length;
+    if (have >= o.count) completed = true;
+  }
+  if (!completed) return;
+
+  state.score += o.reward;
+  state.ordersCompleted += 1;
+  state.orderHistory.push({ order: o, completed: true });
+  addTime(o.type === 'family' ? CONFIG.TIME_PER_ORDER_FAMILY : CONFIG.TIME_PER_ORDER_SINGLE);
+
+  if (orderInterval) { clearInterval(orderInterval); orderInterval = null; }
+  const reward = o.reward;
+  state.currentOrder = null;
+  setTimeout(() => {
+    sndOrderDone();
+    showOrderRewardPopup(reward);
+    checkTier();
+    renderAll();
+  }, 600);
+  renderOrder();
+
+  const sid = state.mySessionId;
+  setTimeout(() => { if (sid === state.mySessionId) nextOrder(); }, CONFIG.ORDER_RESPAWN_DELAY);
+}
+
+function showOrderRewardPopup(amount) {
+  const area = document.getElementById('forge-area');
+  const el = document.createElement('div');
+  el.className = 'score-popup';
+  el.textContent = `订单完成 +${amount}分`;
+  el.style.left = '50%'; el.style.top = '0%';
+  el.style.transform = 'translateX(-50%)';
+  el.style.fontSize = '16px';
+  el.style.color = '#2a6b15';
+  area.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+function nextOrder() {
+  if (orderInterval) { clearInterval(orderInterval); orderInterval = null; }
+  if (gameEnded) return;
+
+  while (state.orderIndex < state.orderPool.length) {
+    const candidate = state.orderPool[state.orderIndex];
+    state.orderIndex += 1;
+
+    if (candidate.type === 'single' && state.forgedChars[candidate.target]) continue;
+    if (candidate.type === 'family') {
+      const have = candidate.eligible.filter(c => state.forgedChars[c]).length;
+      if (have >= candidate.count) continue;
+    }
+
+    state.currentOrder = { ...candidate, startTime: Date.now(), duration: CONFIG.ORDER_DURATION };
+    startOrderTimer();
+    renderOrder();
+    return;
+  }
+
+  state.currentOrder = null;
+  renderOrder();
+}
+
+function startOrderTimer() {
+  if (orderInterval) clearInterval(orderInterval);
+  const sid = state.mySessionId;
+  orderInterval = setInterval(() => {
+    if (sid !== state.mySessionId) { clearInterval(orderInterval); return; }
+    if (!state.currentOrder) { clearInterval(orderInterval); return; }
+    const elapsed = Date.now() - state.currentOrder.startTime;
+    if (elapsed >= state.currentOrder.duration) orderTimeout();
+    else renderOrderTimer();
+  }, 100);
+}
+
+function orderTimeout() {
+  if (orderInterval) { clearInterval(orderInterval); orderInterval = null; }
+  if (state.currentOrder) {
+    state.orderHistory.push({ order: state.currentOrder, completed: false });
+  }
+  state.currentOrder = null;
+  renderOrder();
+  const sid = state.mySessionId;
+  setTimeout(() => { if (sid === state.mySessionId) nextOrder(); }, CONFIG.ORDER_RESPAWN_DELAY);
+}
+
+// ==================== 阶梯 ====================
+function getCurrentTier() {
+  const unique = Object.keys(state.forgedChars).filter(c => LIBRARY_CHARS.includes(c)).length;
+  if (unique >= LIBRARY_CHARS.length && state.ordersCompleted >= CONFIG.PERFECT_ORDERS) return 5;
+  if (state.score >= CONFIG.TIER_PURPLE) return 4;
+  if (state.score >= CONFIG.TIER_3) return 3;
+  if (state.score >= CONFIG.TIER_2) return 2;
+  if (state.score >= CONFIG.TIER_1) return 1;
+  return 0;
+}
+
+const TIER_INFO = {
+  1: { label:'合格', display:'⭐☆☆', level:1 },
+  2: { label:'优秀', display:'⭐⭐☆', level:2 },
+  3: { label:'大师', display:'⭐⭐⭐', level:3 },
+  4: { label:'炫彩大师', display:'💜⭐⭐⭐', level:4, variant:'purple' },
+  5: { label:'完美大师', display:'👑⭐⭐⭐⭐⭐', level:5, variant:'perfect' },
+};
+
+function checkTier() {
+  const tier = getCurrentTier();
+  if (tier > state.maxTier) {
+    const info = TIER_INFO[tier];
+    state.maxTier = tier;
+    setTimeout(() => showTierUnlock(info), 700);
+  }
+}
+
+function showTierUnlock(info) {
+  sndTierUp();
+  const game = document.getElementById('game');
+  const el = document.createElement('div');
+  el.className = 'tier-unlock';
+  if (info.variant === 'purple') el.classList.add('purple');
+  if (info.variant === 'perfect') el.classList.add('perfect');
+  el.innerHTML = `${info.display} ${info.label}！`;
+  game.appendChild(el);
+  setTimeout(() => el.remove(), info.variant === 'perfect' ? 3000 : 2500);
+  if (info.level >= 3) spawnScreenStars(info);
+}
+
+function spawnScreenStars(info) {
+  const game = document.getElementById('game');
+  const gameRect = game.getBoundingClientRect();
+  const cx = gameRect.width / 2;
+  const cy = gameRect.height / 2;
+
+  const count = info.level === 5 ? 22 : (info.level === 4 ? 16 : 12);
+  const emojiSet = info.level === 5 ? ['⭐','💜','🌟','✨','💛','🎉']
+                 : info.level === 4 ? ['💜','⭐','✨','🌟']
+                 : ['⭐','✨','🌟'];
+
+  for (let i = 0; i < count; i++) {
+    const star = document.createElement('div');
+    star.className = 'screen-star';
+    star.textContent = emojiSet[Math.floor(Math.random() * emojiSet.length)];
+    star.style.left = cx + 'px';
+    star.style.top = cy + 'px';
+    const angle = (Math.PI * 2 * i / count) + (Math.random() * 0.4 - 0.2);
+    const dist = 140 + Math.random() * 100;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+    star.animate([
+      { transform: 'translate(-50%,-50%) scale(0.3) rotate(0)', opacity: 0 },
+      { transform: `translate(calc(-50% + ${dx*0.3}px), calc(-50% + ${dy*0.3}px)) scale(1.6) rotate(180deg)`, opacity: 1, offset: 0.3 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.8) rotate(360deg)`, opacity: 0 }
+    ], { duration: 1800 + Math.random() * 500, easing: 'cubic-bezier(.2,.6,.3,1)' });
+    game.appendChild(star);
+    setTimeout(() => star.remove(), 2400);
+  }
+
+  if (info.level === 5) {
+    const crown = document.createElement('div');
+    crown.className = 'screen-crown';
+    crown.textContent = '👑';
+    crown.style.left = cx + 'px';
+    crown.style.top = '0px';
+    crown.animate([
+      { transform: 'translate(-50%,-100%) scale(0.5) rotate(-20deg)', opacity: 0 },
+      { transform: `translate(-50%, ${cy - 100}px) scale(2) rotate(0)`, opacity: 1, offset: 0.5 },
+      { transform: `translate(-50%, ${cy - 100}px) scale(1.5) rotate(0)`, opacity: 0 }
+    ], { duration: 2800, easing: 'cubic-bezier(.3,1.5,.6,1)' });
+    game.appendChild(crown);
+    setTimeout(() => crown.remove(), 2900);
+  }
+}
+
+// ==================== 收工/结算 ====================
+function endLevel() {
+  if (!gameStarted || gameEnded) return;
+  gameEnded = true;
+  if (orderInterval) { clearInterval(orderInterval); orderInterval = null; }
+  if (timeInterval) { clearInterval(timeInterval); timeInterval = null; }
+  showEndModal(false);
+}
+
+function showEndModal(timeout) {
+  const unique = Object.keys(state.forgedChars).filter(c => LIBRARY_CHARS.includes(c)).length;
+  const tier = getCurrentTier();
+  const info = TIER_INFO[tier] || { label:'继续加油！', display:'☆☆☆' };
+  const timeStr = timeout ? '时间到' : `剩余 ${formatTime(Math.max(0, state.timeLeft))}`;
+
+  const starsClass = (info.variant === 'perfect') ? 'rainbow' : '';
+  const labelClass = info.variant === 'purple' ? 'purple' : (info.variant === 'perfect' ? 'perfect' : '');
+
+  const missedChars = CHAR_LIB.filter(c => !state.forgedChars[c.char]);
+  let missedHtml = '';
+  if (missedChars.length > 0) {
+    missedHtml = `
+      <div class="reveal-section">
+        <div class="reveal-title">📖 还没打出的字（${missedChars.length}个）</div>
+        <div class="reveal-chars">
+          ${missedChars.map(c => {
+            const sep = c.structure === 'top-bottom' ? '上<br>下' : '＋';
+            return `<div class="reveal-char">
+              <div class="reveal-char-top"><span class="rc-char">${c.char}</span><span class="rc-py">${c.py}</span></div>
+              <div class="reveal-char-parts">${c.parts[0]} ${c.structure === 'top-bottom' ? '（上）' : '＋'} ${c.parts[1]}${c.structure === 'top-bottom' ? '（下）' : ''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  const failedOrders = state.orderHistory.filter(h => !h.completed);
+  let failedHtml = '';
+  if (failedOrders.length > 0) {
+    failedHtml = `
+      <div class="reveal-section">
+        <div class="reveal-title">📋 没完成的订单答案（${failedOrders.length}个）</div>
+        <div class="reveal-orders">
+          ${failedOrders.map(h => {
+            const o = h.order;
+            let answer;
+            if (o.type === 'single') {
+              const entry = CHAR_MAP[o.target];
+              answer = `${o.target} (${entry ? entry.py : ''})`;
+            } else {
+              const examples = o.eligible.slice(0, 3).map(c => {
+                const entry = CHAR_MAP[c];
+                return `${c}(${entry ? entry.py : ''})`;
+              }).join('、');
+              answer = examples;
+            }
+            return `<div class="reveal-order">
+              <span class="ro-emoji">${o.emoji}</span>
+              <span class="ro-hint">"${o.hint}"</span>
+              <span class="ro-answer">→ ${answer}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  const buttons = timeout
+    ? `<button class="close-btn" onclick="resetGame()">再来一关</button>`
+    : `<button class="close-btn secondary" onclick="closeEndModal()">继续探索</button>
+       <button class="close-btn" onclick="resetGame()">再来一关</button>`;
+
+  const content = document.getElementById('end-content');
+  content.innerHTML = `
+    <div class="end-stars ${starsClass}">${info.display}</div>
+    <div class="end-tier-label ${labelClass}">${info.label}</div>
+    <div class="end-stats-grid">
+      🔤 打出字数：<b>${unique} / ${LIBRARY_CHARS.length}</b><br>
+      📋 完成订单：<b>${state.ordersCompleted} / ${state.orderPool.length}</b><br>
+      ⏱️ ${timeStr}<br>
+      🏆 总积分：<b>${state.score} 分</b>
+    </div>
+    ${missedHtml}
+    ${failedHtml}
+    <div class="end-buttons">${buttons}</div>
+  `;
+  document.getElementById('end-modal').classList.add('show');
+}
+
+function closeEndModal() {
+  document.getElementById('end-modal').classList.remove('show');
+  gameEnded = false;
+  startCountdown();
+  if (state.currentOrder) startOrderTimer();
+  else {
+    const sid = state.mySessionId;
+    setTimeout(() => { if (sid === state.mySessionId) nextOrder(); }, 500);
+  }
+}
+
+// ==================== 提示 ====================
+function useHint() {
+  if (!gameStarted || gameEnded || state.isForging) return;
+
+  if (state.hintsLeft <= 0) {
+    if (state.sharedForHint) {
+      showHintBubble('本关分享机会已用完\n下一关再来吧！');
+      return;
+    }
+    showHintBubble(`📤 分享功能开发中\n赠送你 ${CONFIG.SHARE_BONUS_HINTS} 次提示！`);
+    state.hintsLeft = CONFIG.SHARE_BONUS_HINTS;
+    state.sharedForHint = true;
+    renderHintBtn();
+    return;
+  }
+
+  const undiscovered = LIBRARY_CHARS.filter(c => !state.forgedChars[c]);
+  if (undiscovered.length === 0) {
+    showHintBubble('全部打完啦！');
+    return;
+  }
+  state.hintsLeft -= 1;
+  const target = (state.currentOrder && state.currentOrder.type === 'single' && !state.forgedChars[state.currentOrder.target])
+    ? state.currentOrder.target
+    : undiscovered[Math.floor(Math.random() * undiscovered.length)];
+  const entry = CHAR_MAP[target];
+  const [p1, p2] = entry.parts;
+  const sep = entry.structure === 'top-bottom' ? '（上）＋（下）' : '（左）＋（右）';
+  showHintBubble(`试试 ${p1} + ${p2} = ${target}\n（${entry.structure === 'top-bottom' ? '上下结构' : '左右结构'}）`);
+  renderHintBtn();
+}
+
+function showHintBubble(text) {
+  const game = document.getElementById('game');
+  const old = game.querySelector('.hint-bubble');
+  if (old) old.remove();
+  const el = document.createElement('div');
+  el.className = 'hint-bubble';
+  el.textContent = text;
+  game.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function resetGame() {
+  document.getElementById('end-modal').classList.remove('show');
+  init();
+}
+
+// ==================== 工具 ====================
+function formatTime(seconds) {
+  const m = Math.max(0, Math.floor(seconds / 60));
+  const s = Math.max(0, seconds % 60);
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ==================== 渲染 ====================
+function renderAll() {
+  renderPool();
+  renderAnvil();
+  renderLibrary();
+  renderScore();
+  renderHintBtn();
+  renderTime();
+  renderOrder();
+}
+
+function renderTime() {
+  const el = document.getElementById('time-display');
+  el.textContent = `⏱ ${formatTime(state.timeLeft)}`;
+  if (state.timeLeft <= CONFIG.URGENT_THRESHOLD && state.timeLeft > 0 && gameStarted && !gameEnded) {
+    el.classList.add('urgent');
+  } else {
+    el.classList.remove('urgent');
+  }
+}
+
+function renderPool() {
+  const grid = document.getElementById('parts-grid');
+  const anvilFull = state.anvil.every(s => s !== null);
+  const disabled = !gameStarted || gameEnded || state.isForging || anvilFull;
+  grid.innerHTML = PARTS.map((p, i) =>
+    `<div class="part${disabled ? ' disabled' : ''}" data-part-idx="${i}" onclick="pickPart(${i})">${p}</div>`
+  ).join('');
+}
+
+function renderAnvil() {
+  for (let i = 0; i < 2; i++) {
+    const slot = document.getElementById(`slot-${i}`);
+    const p = state.anvil[i];
+    if (p) { slot.textContent = p; slot.classList.add('filled'); }
+    else { slot.textContent = ''; slot.classList.remove('filled'); }
+  }
+  // "+"号在有至少一格有字时高亮
+  const plus = document.getElementById('anvil-plus');
+  const hasAny = state.anvil.some(s => s !== null);
+  if (hasAny) plus.classList.add('active');
+  else plus.classList.remove('active');
+}
+
+function renderOrder() {
+  const row = document.getElementById('order-row');
+  if (!state.currentOrder) {
+    if (state.orderIndex >= state.orderPool.length) {
+      row.innerHTML = `<div class="order-empty all-done">✅ 村民都满足了，开始自由探索！</div>`;
+    } else {
+      row.innerHTML = `<div class="order-empty">🔄 村民在想新订单...</div>`;
+    }
+    return;
+  }
+  const o = state.currentOrder;
+  let progressText = '';
+  if (o.type === 'family') {
+    const have = o.eligible.filter(c => state.forgedChars[c]).length;
+    progressText = `${Math.min(have, o.count)}/${o.count}`;
+  }
+  const currentIdx = state.orderIndex;
+  row.innerHTML = `
+    <div class="order-icon">${o.emoji}</div>
+    <div class="order-body">
+      <div class="order-text">${o.hint}</div>
+      <div class="order-timer"><div class="order-timer-fill" id="order-timer-fill" style="width:100%"></div></div>
+    </div>
+    <div class="order-right">
+      <div class="order-reward">+${o.reward}分</div>
+      ${progressText ? `<div class="order-progress-text">${progressText}</div>` : `<div class="order-progress-text">第${currentIdx}/${state.orderPool.length}单</div>`}
+    </div>
+  `;
+  renderOrderTimer();
+}
+
+function renderOrderTimer() {
+  const fill = document.getElementById('order-timer-fill');
+  if (!fill || !state.currentOrder) return;
+  const elapsed = Date.now() - state.currentOrder.startTime;
+  const remaining = state.currentOrder.duration - elapsed;
+  const pct = Math.max(0, Math.min(100, remaining / state.currentOrder.duration * 100));
+  fill.style.width = pct + '%';
+  if (pct < 30) fill.style.background = 'linear-gradient(90deg, #ff5555, #ff3333)';
+  else if (pct < 60) fill.style.background = 'linear-gradient(90deg, #ffc72e, #ff8c42)';
+  else fill.style.background = 'linear-gradient(90deg, #88d060, #4caf50)';
+}
+
+function renderLibrary() {
+  const grid = document.getElementById('library-grid');
+  const countEl = document.getElementById('library-count');
+  const starsEl = document.getElementById('lib-stars');
+  const done = LIBRARY_CHARS.filter(c => state.forgedChars[c]).length;
+  countEl.textContent = `${done} / ${LIBRARY_CHARS.length}`;
+  const tier = getCurrentTier();
+  const info = TIER_INFO[tier] || { display:'☆☆☆' };
+  starsEl.innerHTML = `${info.display} <span style="color:#3d2814;">${state.score}分</span>`;
+
+  grid.innerHTML = LIBRARY_CHARS.map(c => {
+    const hasIt = !!state.forgedChars[c];
+    const isNew = state.justUnlocked === c;
+    const cls = ['char-cell', hasIt ? 'discovered' : '', isNew ? 'just-unlocked' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}" data-char="${c}">
+      <div class="char">${hasIt ? c : '?'}</div>
+      <div class="pinyin">${hasIt ? CHAR_MAP[c].py : '··'}</div>
+    </div>`;
+  }).join('');
+  state.justUnlocked = null;
+
+  const fill = document.getElementById('lib-tier-fill');
+  const pct = Math.min(100, (state.score / CONFIG.TIER_BAR_MAX) * 100);
+  fill.style.width = pct + '%';
+  if (state.score >= CONFIG.TIER_PURPLE) fill.classList.add('purple');
+  else fill.classList.remove('purple');
+
+  const markers = document.getElementById('lib-tier-markers');
+  const nodes = [
+    { score: CONFIG.TIER_1, label: '60' },
+    { score: CONFIG.TIER_2, label: '140' },
+    { score: CONFIG.TIER_3, label: '220' },
+    { score: CONFIG.TIER_PURPLE, label: '280', special: true },
+  ];
+  markers.innerHTML = nodes.map(n => {
+    const leftPct = (n.score / CONFIG.TIER_BAR_MAX) * 100;
+    const reached = state.score >= n.score;
+    const cls = ['lib-tier-marker', reached ? 'reached' : '', n.special ? 'special' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}" style="left:${leftPct}%">
+      <div class="marker-dot"></div>
+      <div class="marker-label">${n.label}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderScore() {
+  document.getElementById('score-amount').textContent = state.score;
+}
+
+function renderHintBtn() {
+  const btn = document.getElementById('hint-btn');
+  if (state.hintsLeft > 0) {
+    btn.innerHTML = `💡 提示 ${state.hintsLeft}`;
+    btn.classList.remove('share-mode');
+  } else {
+    btn.innerHTML = `📤 分享得提示`;
+    btn.classList.add('share-mode');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

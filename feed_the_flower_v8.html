@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<!--
+名称：喂食大嘴花 v8（胶囊卡版）
+用途：双学科 6 关完整版
+参考来源：原创概念
+可调参数说明：见 <script> 内 CONFIG 及 LEVELS 配置
+类型：独立场景模版
+日期：2026-04-23
+v8 主要变更（基于 v7 反馈：食物正方形导致文字换行）：
+  - 食物形状：正方形/圆形 → 胶囊形横卡（宽>高），永远一行显示
+  - white-space: nowrap 强制文字不换行
+  - 难度策略调整：选项数最大 5，主要靠"耐心时长"梯度拉开难度
+  - 池子改为 flex 布局而非 grid，宽度自适应 + 均分
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>喂食大嘴花 v4</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #FFE8D6 0%, #FFF4E6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .phone {
+    width: 390px;
+    height: 780px;
+    background: #1a1a1a;
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 18px; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 26px;
+    background: #000;
+    border-radius: 16px;
+    z-index: 100;
+  }
+  .screen {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #B3E5FC 0%, #C8E6C9 55%, #81C784 100%);
+    border-radius: 32px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ===== 主菜单（学科切换+关卡选择） ===== */
+  .main-menu {
+    position: absolute; inset: 0;
+    padding: 56px 20px 20px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #B3E5FC 0%, #C8E6C9 55%, #81C784 100%);
+    border-radius: 32px;
+  }
+  .menu-title {
+    text-align: center;
+    font-size: 26px;
+    font-weight: 900;
+    color: #4E342E;
+    text-shadow: 0 2px 4px rgba(255,255,255,0.6);
+    margin-bottom: 4px;
+  }
+  .menu-subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #6D4C41;
+    margin-bottom: 18px;
+  }
+  /* Tab 切换 */
+  .tabs {
+    display: flex;
+    background: rgba(255,255,255,0.7);
+    border-radius: 24px;
+    padding: 4px;
+    margin: 0 20px 20px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.08);
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 20px;
+    font-size: 15px;
+    font-weight: 800;
+    text-align: center;
+    color: #8D6E63;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .tab.active {
+    background: linear-gradient(180deg, #FFB74D, #FB8C00);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(251,140,0,0.4);
+  }
+  .level-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 4px;
+  }
+  .level-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: transform 0.15s;
+    border: 3px solid transparent;
+  }
+  .level-card:active { transform: scale(0.97); }
+  .level-card.locked { opacity: 0.55; cursor: not-allowed; }
+  .level-card.locked:active { transform: none; }
+  .level-icon {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    flex-shrink: 0;
+  }
+  .level-icon.math  { background: linear-gradient(135deg, #64B5F6, #1976D2); }
+  .level-icon.idiom { background: linear-gradient(135deg, #81C784, #AB47BC); }
+  .level-icon.locked { background: #BDBDBD; color: #fff; }
+  .level-info { flex: 1; }
+  .level-name { font-size: 16px; font-weight: 800; color: #4E342E; margin-bottom: 2px; }
+  .level-desc { font-size: 12px; color: #8D6E63; }
+  .level-stars {
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+  .star-filled { color: #FFC107; }
+  .star-unfilled { color: #E0E0E0; }
+
+  /* ===== 游戏 HUD ===== */
+  .hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 48px 14px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 50;
+    background: linear-gradient(180deg, rgba(255,255,255,0.5), rgba(255,255,255,0));
+  }
+  .hud-chip {
+    background: rgba(255,255,255,0.9);
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4E342E;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .back-btn {
+    background: rgba(255,255,255,0.9);
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #4E342E;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .hearts { display: flex; gap: 3px; }
+  .heart { font-size: 17px; transition: transform 0.3s, opacity 0.3s; }
+  .heart.lost { opacity: 0.25; transform: scale(0.85); filter: grayscale(1); }
+
+  /* ===== 花园 ===== */
+  .garden {
+    position: absolute;
+    top: 92px;
+    left: 0; right: 0;
+    height: 548px;
+  }
+  .flower {
+    position: absolute;
+    width: 170px;
+    height: 190px;
+    cursor: pointer;
+    will-change: transform;
+  }
+  .flower.spawning { animation: bloom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes bloom {
+    0%   { transform: scale(0) translateY(20px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .flower.sway .flower-core {
+    animation: sway 2.5s ease-in-out infinite;
+    transform-origin: center 30px;
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(-2deg); }
+    50%      { transform: rotate(2deg); }
+  }
+  .flower.urgent .flower-core {
+    animation: shake 0.25s ease-in-out infinite;
+    transform-origin: center;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0) rotate(0); }
+    25%      { transform: translateX(-3px) rotate(-1deg); }
+    75%      { transform: translateX(3px) rotate(1deg); }
+  }
+  .flower.urgent .countdown-ring {
+    animation: ring-blink 0.4s ease-in-out infinite;
+  }
+  @keyframes ring-blink {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.6) drop-shadow(0 0 6px red); }
+  }
+  .flower.stunned .flower-face-group { animation: spin-eyes 0.6s linear infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes spin-eyes {
+    0%   { transform: rotate(0); }
+    100% { transform: rotate(360deg); }
+  }
+  .flower.eating .flower-mouth-open { animation: chomp 0.3s ease-out; transform-origin: center; transform-box: fill-box; }
+  @keyframes chomp {
+    0%   { transform: scaleY(1); }
+    50%  { transform: scaleY(0.2); }
+    100% { transform: scaleY(1); }
+  }
+  .flower.full-burst {
+    animation: full-burst 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes full-burst {
+    0%   { filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
+    20%  { filter: drop-shadow(0 0 25px gold) brightness(1.3); transform: scale(1.3); }
+    60%  { filter: drop-shadow(0 0 15px gold) brightness(1.15); transform: scale(1.1); }
+    100% { filter: drop-shadow(0 0 10px gold); transform: scale(1); }
+  }
+  .flower.full-pulse { animation: full-pulse 1.2s ease-in-out infinite; }
+  @keyframes full-pulse {
+    0%, 100% { filter: drop-shadow(0 0 8px gold); }
+    50%      { filter: drop-shadow(0 0 18px gold) brightness(1.15); }
+  }
+  .flower.attacking {
+    animation: attack-lunge 0.6s ease-in forwards;
+    z-index: 60;
+  }
+  @keyframes attack-lunge {
+    0%   { transform: scale(1) translateY(0); }
+    50%  { transform: scale(2.2) translateY(80px); filter: brightness(0.7); }
+    100% { transform: scale(3) translateY(160px); opacity: 0; }
+  }
+  .flower.dying { animation: fade-out 0.4s ease-out forwards; }
+  @keyframes fade-out {
+    0%   { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.6) translateY(20px); }
+  }
+  /* 耐心回血闪光 */
+  .flower.healed .countdown-ring {
+    animation: ring-heal 0.5s ease-out;
+  }
+  @keyframes ring-heal {
+    0%   { filter: drop-shadow(0 0 0 transparent) brightness(1); }
+    50%  { filter: drop-shadow(0 0 10px #4CAF50) brightness(1.6); }
+    100% { filter: drop-shadow(0 0 0 transparent) brightness(1); }
+  }
+  .flower-svg { width: 100%; height: 100%; overflow: visible; display: block; }
+
+  /* ===== 食物池 v8：flex 布局 + 胶囊卡（宽>高） ===== */
+  .food-pool {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 110px;
+    padding: 18px 12px 22px;
+    background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 25%, rgba(255,255,255,0.9) 100%);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-top: 3px dashed rgba(255,255,255,0.7);
+  }
+  .food-slot {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    height: 60px;
+    max-width: 90px;
+  }
+  .food {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 35% 30%, #FFF59D, #FBC02D);
+    border: 2.5px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    color: #5D4037;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    cursor: grab;
+    transition: opacity 0.15s;
+    touch-action: none;
+    will-change: transform, opacity;
+    text-align: center;
+    line-height: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;        /* v8 关键：强制不换行 */
+  }
+  /* 数学内容：胶囊形 */
+  .food.math {
+    border-radius: 30px;
+    font-size: 20px;
+    letter-spacing: -0.5px;
+  }
+  /* 成语内容：圆角胶囊 */
+  .food.idiom {
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0;
+    background: radial-gradient(ellipse at 35% 25%, #FFF9C4, #FFD54F);
+  }
+  .food::before {
+    content: "";
+    position: absolute;
+    top: -5px; left: 12%;
+    width: 8px; height: 10px;
+    background: #66BB6A;
+    border-radius: 0 50% 50% 0;
+    transform: rotate(30deg);
+  }
+  .food.idiom::before {
+    top: -4px;
+    width: 6px; height: 8px;
+  }
+  .food.vanishing { animation: food-vanish 0.25s ease-out forwards; }
+  @keyframes food-vanish {
+    0%   { transform: scale(1); opacity: 1; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+  .food.spawning { animation: food-spawn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes food-spawn {
+    0%   { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ===== 拖拽 ghost v8：胶囊 ===== */
+  .drag-ghost {
+    position: fixed;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 1000;
+    height: 64px;
+    min-width: 76px;
+    padding: 0 14px;
+    border: 3px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    color: #5D4037;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    will-change: transform;
+    text-align: center;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .drag-ghost.math {
+    border-radius: 32px;
+    background: radial-gradient(ellipse at 35% 30%, #FFF59D, #FBC02D);
+    font-size: 24px;
+    letter-spacing: -0.5px;
+  }
+  .drag-ghost.idiom {
+    border-radius: 16px;
+    background: radial-gradient(ellipse at 35% 25%, #FFF9C4, #FFD54F);
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  /* ===== 粒子 & 效果 ===== */
+  .particle {
+    position: absolute;
+    pointer-events: none;
+    font-size: 22px;
+    animation: particle-fly 0.8s ease-out forwards;
+    z-index: 300;
+  }
+  @keyframes particle-fly {
+    0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -180%) scale(1.8); opacity: 0; }
+  }
+  .score-pop {
+    position: absolute;
+    pointer-events: none;
+    font-size: 22px;
+    font-weight: 900;
+    color: #2E7D32;
+    text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+    animation: score-pop 1s ease-out forwards;
+    z-index: 300;
+    white-space: nowrap;
+  }
+  @keyframes score-pop {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+    30%  { transform: translate(-50%, -80%) scale(1.3); opacity: 1; }
+    100% { transform: translate(-50%, -150%) scale(1); opacity: 0; }
+  }
+  .gold-halo {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    border: 5px solid #FFD700;
+    transform: translate(-50%, -50%);
+    animation: halo-expand 0.9s ease-out forwards;
+    z-index: 290;
+    box-shadow: 0 0 20px gold;
+  }
+  @keyframes halo-expand {
+    0%   { width: 30px; height: 30px; opacity: 1; border-width: 6px; }
+    100% { width: 240px; height: 240px; opacity: 0; border-width: 1px; }
+  }
+  .gold-halo.delay { animation-delay: 0.15s; }
+  .sparkle {
+    position: absolute;
+    pointer-events: none;
+    font-size: 24px;
+    transform: translate(-50%, -50%);
+    animation: sparkle-shoot 0.9s ease-out forwards;
+    z-index: 295;
+    filter: drop-shadow(0 0 4px gold);
+  }
+  @keyframes sparkle-shoot {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+    15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.4); }
+    100% {
+      opacity: 0;
+      transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.5) rotate(180deg);
+    }
+  }
+
+  /* ===== 模态 ===== */
+  .modal {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    animation: fade-in 0.3s;
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .modal-card {
+    background: #fff;
+    border-radius: 24px;
+    padding: 26px 22px;
+    width: 82%;
+    max-width: 300px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    animation: card-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes card-pop { from { transform: scale(0.7); } to { transform: scale(1); } }
+  .modal-icon { font-size: 56px; margin-bottom: 6px; }
+  .modal-title { font-size: 22px; font-weight: 800; color: #4E342E; margin-bottom: 8px; }
+  .modal-desc { font-size: 13px; color: #6D4C41; margin-bottom: 18px; line-height: 1.6; }
+  .stars { font-size: 34px; margin-bottom: 14px; letter-spacing: 4px; }
+  .star-empty { opacity: 0.25; filter: grayscale(1); }
+  .btn-row { display: flex; gap: 10px; justify-content: center; }
+  .btn {
+    background: linear-gradient(180deg, #FFB74D, #FB8C00);
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 28px;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #E65100, 0 8px 16px rgba(230,81,0,0.3);
+    transition: transform 0.1s;
+    font-family: inherit;
+  }
+  .btn.secondary {
+    background: linear-gradient(180deg, #B0BEC5, #78909C);
+    box-shadow: 0 4px 0 #455A64, 0 8px 16px rgba(69,90,100,0.3);
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #E65100; }
+  .btn.secondary:active { box-shadow: 0 2px 0 #455A64; }
+
+  .bitten-flash {
+    position: absolute; inset: 0;
+    background: #000;
+    z-index: 400;
+    pointer-events: none;
+    animation: bitten-flash 0.8s ease-out forwards;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 40px;
+    font-weight: 900;
+  }
+  @keyframes bitten-flash {
+    0%   { opacity: 0; }
+    30%  { opacity: 0.85; }
+    100% { opacity: 0; }
+  }
+  .level-banner {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    color: #fff;
+    font-size: 36px;
+    font-weight: 900;
+    text-shadow: 0 4px 0 #FB8C00, 0 8px 20px rgba(0,0,0,0.3);
+    z-index: 450;
+    pointer-events: none;
+    animation: banner-show 2s ease-out forwards;
+  }
+  @keyframes banner-show {
+    0%   { transform: translate(-50%, -50%) scale(0) rotate(-20deg); opacity: 0; }
+    20%  { transform: translate(-50%, -50%) scale(1.2) rotate(0); opacity: 1; }
+    80%  { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
+    100% { transform: translate(-50%, -150%) scale(0.8) rotate(0); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="screen" id="screen">
+      <!-- 主菜单 -->
+      <div class="main-menu" id="main-menu">
+        <div class="menu-title">🌻 喂食大嘴花</div>
+        <div class="menu-subtitle">拖食物进花嘴，别让花生气啦</div>
+        <div class="tabs">
+          <div class="tab active" data-subject="math">🔢 数学</div>
+          <div class="tab" data-subject="idiom">📖 成语</div>
+        </div>
+        <div class="level-list" id="level-list"></div>
+      </div>
+
+      <!-- 游戏界面 -->
+      <div class="hud" id="hud" style="display:none;">
+        <div class="back-btn" id="back-btn">← 返回</div>
+        <div class="hud-chip">🌸 <span id="progress">0</span>/<span id="target">8</span></div>
+        <div class="hud-chip hearts" id="hearts"></div>
+      </div>
+      <div class="garden" id="garden" style="display:none;"></div>
+      <div class="food-pool" id="food-pool" style="display:none;"></div>
+    </div>
+  </div>
+
+<script>
+/* ========================================================================
+   CONFIG
+   ======================================================================== */
+const CONFIG = {
+  START_HEARTS: 3,
+  MAX_ACTIVE_FLOWERS: 2,
+  PATIENCE_DURATION_MS: 18000,
+  URGENT_THRESHOLD: 0.35,
+  SPAWN_OFFSET_MS: 2500,
+  RESPAWN_DELAY_MS: 200,
+  BITES_TO_FULL: 4,
+  STUN_DURATION_MS: 1000,
+  HEAL_RATIO: 0.25,
+  POOL_SIZE: 6,                   // v6: 18 → 6
+  REFILL_DELAY_MS: 100,           // v6: 补位延迟（原 260ms）
+  QUEUE_PREFILL: 12,              // v6: 预生成候补队列大小
+  MIN_SOLVABLE_PER_FLOWER: 2,     // v6: 每朵活跃花至少保证 N 个可喂食物
+  RING_UPDATE_INTERVAL: 100,
+};
+
+/* ========================================================================
+   关卡数据（数学/成语各自独立，可扩展）
+   ======================================================================== */
+const LEVELS = {
+  math: [
+    {
+      id: 'math-1',
+      name: '第 1 关 · 加法算奇偶',
+      desc: '20 以内加法',
+      target: 8,
+      poolSize: 4,
+      patienceMs: 18000,
+      unlocked: true,
+      generator: 'mathAddOddEven',
+    },
+    {
+      id: 'math-2',
+      name: '第 2 关 · 加减法奇偶',
+      desc: '20 以内加减法',
+      target: 10,
+      poolSize: 4,
+      patienceMs: 16000,
+      unlocked: true,
+      generator: 'mathAddSubOddEven',
+    },
+    {
+      id: 'math-3',
+      name: '第 3 关 · 两位数奇偶',
+      desc: '50 以内加减法',
+      target: 12,
+      poolSize: 5,
+      patienceMs: 14000,
+      unlocked: true,
+      generator: 'mathBigAddSubOddEven',
+    },
+  ],
+  idiom: [
+    {
+      id: 'idiom-1',
+      name: '第 1 关 · 褒义贬义',
+      desc: '判断成语的褒贬',
+      target: 8,
+      poolSize: 4,
+      patienceMs: 18000,
+      unlocked: true,
+      generator: 'idiomPraiseDerog',
+    },
+    {
+      id: 'idiom-2',
+      name: '第 2 关 · 动物成语',
+      desc: '是否含有动物',
+      target: 8,
+      poolSize: 4,
+      patienceMs: 16000,
+      unlocked: true,
+      generator: 'idiomAnimal',
+    },
+    {
+      id: 'idiom-3',
+      name: '第 3 关 · 人物 vs 景物',
+      desc: '描写对象分类',
+      target: 10,
+      poolSize: 5,
+      patienceMs: 14000,
+      unlocked: true,
+      generator: 'idiomPersonScene',
+    },
+  ],
+};
+
+// 通关记录（内存，重启丢失；上线后走存储）
+const progress = { 'math-1': 0, 'math-2': 0, 'math-3': 0, 'idiom-1': 0, 'idiom-2': 0, 'idiom-3': 0 };
+
+/* ========================================================================
+   题库生成器
+   每个 generator 返回一个对象：
+   { flowerTypes: ['A', 'B'], genFood: () => {display, type}, labels: {A, B}, palette: {A, B} }
+   type 统一用字符串标签（'odd'/'even' 或 'praise'/'derog'）
+   ======================================================================== */
+const GENERATORS = {
+  // ============ 数学第 1 关：20 以内加法，结果奇偶 ============
+  mathAddOddEven() {
+    const genFood = () => {
+      let a, b, sum;
+      do {
+        a = 1 + Math.floor(Math.random() * 15);
+        b = 1 + Math.floor(Math.random() * 15);
+        sum = a + b;
+      } while (sum > 20 || sum < 2);
+      return { display: `${a}+${b}`, type: sum % 2 === 0 ? 'even' : 'odd', kind: 'math' };
+    };
+    const genFoodOfType = (wantType) => {
+      for (let i = 0; i < 30; i++) {
+        const f = genFood();
+        if (f.type === wantType) return f;
+      }
+      return wantType === 'odd'
+        ? { display: '1+2', type: 'odd', kind: 'math' }
+        : { display: '1+1', type: 'even', kind: 'math' };
+    };
+    return mathOddEvenBase(genFood, genFoodOfType);
+  },
+
+  // ============ 数学第 2 关：20 以内加减法混合，结果奇偶 ============
+  mathAddSubOddEven() {
+    const genFood = () => {
+      const isAdd = Math.random() < 0.5;
+      let a, b, result;
+      if (isAdd) {
+        do {
+          a = 1 + Math.floor(Math.random() * 15);
+          b = 1 + Math.floor(Math.random() * 15);
+          result = a + b;
+        } while (result > 20 || result < 2);
+        return { display: `${a}+${b}`, type: result % 2 === 0 ? 'even' : 'odd', kind: 'math' };
+      } else {
+        do {
+          a = 2 + Math.floor(Math.random() * 19);
+          b = 1 + Math.floor(Math.random() * (a - 1));
+          result = a - b;
+        } while (result < 1);
+        return { display: `${a}-${b}`, type: result % 2 === 0 ? 'even' : 'odd', kind: 'math' };
+      }
+    };
+    const genFoodOfType = (wantType) => {
+      for (let i = 0; i < 40; i++) {
+        const f = genFood();
+        if (f.type === wantType) return f;
+      }
+      return wantType === 'odd'
+        ? { display: '2-1', type: 'odd', kind: 'math' }
+        : { display: '3-1', type: 'even', kind: 'math' };
+    };
+    return mathOddEvenBase(genFood, genFoodOfType);
+  },
+
+  // ============ 数学第 3 关：50 以内加减法，结果奇偶 ============
+  mathBigAddSubOddEven() {
+    const genFood = () => {
+      const isAdd = Math.random() < 0.5;
+      let a, b, result;
+      if (isAdd) {
+        do {
+          a = 5 + Math.floor(Math.random() * 40);     // 5~44
+          b = 5 + Math.floor(Math.random() * 40);     // 5~44
+          result = a + b;
+        } while (result > 50 || result < 10);
+        return { display: `${a}+${b}`, type: result % 2 === 0 ? 'even' : 'odd', kind: 'math' };
+      } else {
+        do {
+          a = 11 + Math.floor(Math.random() * 40);    // 11~50
+          b = 2 + Math.floor(Math.random() * (a - 2));
+          result = a - b;
+        } while (result < 2);
+        return { display: `${a}-${b}`, type: result % 2 === 0 ? 'even' : 'odd', kind: 'math' };
+      }
+    };
+    const genFoodOfType = (wantType) => {
+      for (let i = 0; i < 40; i++) {
+        const f = genFood();
+        if (f.type === wantType) return f;
+      }
+      return wantType === 'odd'
+        ? { display: '12-1', type: 'odd', kind: 'math' }
+        : { display: '14-2', type: 'even', kind: 'math' };
+    };
+    return mathOddEvenBase(genFood, genFoodOfType);
+  },
+
+  // ============ 成语第 1 关：褒义 vs 贬义 ============
+  idiomPraiseDerog() {
+    const BANK = [
+      { w: '锦上添花', type: 'praise' },{ w: '如鱼得水', type: 'praise' },
+      { w: '妙笔生花', type: 'praise' },{ w: '虚怀若谷', type: 'praise' },
+      { w: '兢兢业业', type: 'praise' },{ w: '拾金不昧', type: 'praise' },
+      { w: '废寝忘食', type: 'praise' },{ w: '大公无私', type: 'praise' },
+      { w: '舍己为人', type: 'praise' },{ w: '精益求精', type: 'praise' },
+      { w: '一丝不苟', type: 'praise' },{ w: '胸有成竹', type: 'praise' },
+      { w: '画龙点睛', type: 'praise' },{ w: '雪中送炭', type: 'praise' },
+      { w: '光明磊落', type: 'praise' },
+      { w: '鸡飞狗跳', type: 'derog' },{ w: '狐假虎威', type: 'derog' },
+      { w: '班门弄斧', type: 'derog' },{ w: '画蛇添足', type: 'derog' },
+      { w: '见利忘义', type: 'derog' },{ w: '口是心非', type: 'derog' },
+      { w: '阳奉阴违', type: 'derog' },{ w: '自私自利', type: 'derog' },
+      { w: '指鹿为马', type: 'derog' },{ w: '朝三暮四', type: 'derog' },
+      { w: '狼狈为奸', type: 'derog' },{ w: '招摇撞骗', type: 'derog' },
+      { w: '恶贯满盈', type: 'derog' },{ w: '弄虚作假', type: 'derog' },
+      { w: '颠倒黑白', type: 'derog' },
+    ];
+    return idiomBase(BANK, {
+      typeA: 'praise', typeB: 'derog',
+      labels: { praise: '褒义', derog: '贬义' },
+      icons:  { praise: '😊', derog: '😠' },
+      palette: {
+        praise: { petal:'#AED581', petalDark:'#558B2F', mouth:'#33691E', tongue:'#FFCDD2', ring:'#689F38', face:'#FFF9C4' },
+        derog:  { petal:'#CE93D8', petalDark:'#7B1FA2', mouth:'#4A148C', tongue:'#F8BBD0', ring:'#8E24AA', face:'#FFF9C4' },
+      },
+    });
+  },
+
+  // ============ 成语第 2 关：含动物 vs 不含动物 ============
+  idiomAnimal() {
+    const BANK = [
+      // 含动物
+      { w: '守株待兔', type: 'animal' },{ w: '画蛇添足', type: 'animal' },
+      { w: '指鹿为马', type: 'animal' },{ w: '狐假虎威', type: 'animal' },
+      { w: '鸡飞狗跳', type: 'animal' },{ w: '井底之蛙', type: 'animal' },
+      { w: '亡羊补牢', type: 'animal' },{ w: '狼狈为奸', type: 'animal' },
+      { w: '龙飞凤舞', type: 'animal' },{ w: '兔死狐悲', type: 'animal' },
+      { w: '鹤立鸡群', type: 'animal' },{ w: '狡兔三窟', type: 'animal' },
+      { w: '蛇蝎心肠', type: 'animal' },{ w: '马到成功', type: 'animal' },
+      { w: '虎头蛇尾', type: 'animal' },{ w: '对牛弹琴', type: 'animal' },
+      // 不含动物
+      { w: '锦上添花', type: 'no_animal' },{ w: '雪中送炭', type: 'no_animal' },
+      { w: '画龙点睛', type: 'animal' }, // 龙也算动物
+      { w: '胸有成竹', type: 'no_animal' },{ w: '光明磊落', type: 'no_animal' },
+      { w: '一丝不苟', type: 'no_animal' },{ w: '妙笔生花', type: 'no_animal' },
+      { w: '废寝忘食', type: 'no_animal' },{ w: '水落石出', type: 'no_animal' },
+      { w: '五光十色', type: 'no_animal' },{ w: '万紫千红', type: 'no_animal' },
+      { w: '翻天覆地', type: 'no_animal' },{ w: '斩钉截铁', type: 'no_animal' },
+      { w: '聚精会神', type: 'no_animal' },{ w: '精益求精', type: 'no_animal' },
+    ];
+    return idiomBase(BANK, {
+      typeA: 'animal', typeB: 'no_animal',
+      labels: { animal: '有动物', no_animal: '无动物' },
+      icons:  { animal: '🐾', no_animal: '🌸' },
+      palette: {
+        animal:    { petal:'#FFB74D', petalDark:'#E65100', mouth:'#BF360C', tongue:'#FFCCBC', ring:'#F57C00', face:'#FFF9C4' },
+        no_animal: { petal:'#90CAF9', petalDark:'#1565C0', mouth:'#0D47A1', tongue:'#BBDEFB', ring:'#1976D2', face:'#FFF9C4' },
+      },
+    });
+  },
+
+  // ============ 成语第 3 关：描写人物 vs 描写景物 ============
+  idiomPersonScene() {
+    const BANK = [
+      // 描写人物（人的品质/状态/动作）
+      { w: '眉清目秀', type: 'person' },{ w: '亭亭玉立', type: 'person' },
+      { w: '垂头丧气', type: 'person' },{ w: '眉飞色舞', type: 'person' },
+      { w: '文质彬彬', type: 'person' },{ w: '虎背熊腰', type: 'person' },
+      { w: '满面春风', type: 'person' },{ w: '目瞪口呆', type: 'person' },
+      { w: '聚精会神', type: 'person' },{ w: '兢兢业业', type: 'person' },
+      { w: '废寝忘食', type: 'person' },{ w: '一丝不苟', type: 'person' },
+      { w: '奋不顾身', type: 'person' },{ w: '从容不迫', type: 'person' },
+      { w: '昂首挺胸', type: 'person' },
+      // 描写景物（自然/风光）
+      { w: '山清水秀', type: 'scene' },{ w: '鸟语花香', type: 'scene' },
+      { w: '风和日丽', type: 'scene' },{ w: '湖光山色', type: 'scene' },
+      { w: '草长莺飞', type: 'scene' },{ w: '万紫千红', type: 'scene' },
+      { w: '花团锦簇', type: 'scene' },{ w: '绿树成荫', type: 'scene' },
+      { w: '青山绿水', type: 'scene' },{ w: '五光十色', type: 'scene' },
+      { w: '蓝天白云', type: 'scene' },{ w: '大雪纷飞', type: 'scene' },
+      { w: '冰天雪地', type: 'scene' },{ w: '晴空万里', type: 'scene' },
+      { w: '鸟飞鱼跃', type: 'scene' },
+    ];
+    return idiomBase(BANK, {
+      typeA: 'person', typeB: 'scene',
+      labels: { person: '写人物', scene: '写景物' },
+      icons:  { person: '🧑', scene: '🏞️' },
+      palette: {
+        person: { petal:'#FFAB91', petalDark:'#BF360C', mouth:'#3E2723', tongue:'#FFCCBC', ring:'#D84315', face:'#FFF9C4' },
+        scene:  { petal:'#80CBC4', petalDark:'#00695C', mouth:'#004D40', tongue:'#B2DFDB', ring:'#00897B', face:'#FFF9C4' },
+      },
+    });
+  },
+};
+
+/* ========================================================================
+   Generator 复用基座：数学奇偶类 / 成语分类类
+   ======================================================================== */
+// 所有"奇偶分类"共用的视觉配置
+function mathOddEvenBase(genFood, genFoodOfType) {
+  return {
+    flowerTypes: ['odd', 'even'],
+    genFood, genFoodOfType,
+    labels:  { odd: '单数', even: '双数' },
+    icons:   { odd: '1️⃣', even: '2️⃣' },
+    palette: {
+      odd:  { petal:'#64B5F6', petalDark:'#1565C0', mouth:'#0D47A1', tongue:'#E57373', ring:'#1976D2', face:'#FFF59D' },
+      even: { petal:'#EF5350', petalDark:'#C62828', mouth:'#8B0000', tongue:'#FFAB91', ring:'#D32F2F', face:'#FFF59D' },
+    },
+  };
+}
+
+// 成语题库通用生成器（洗牌+顺序出题，保证同一局不重复）
+function idiomBase(BANK, opts) {
+  const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+  let queue = shuffle(BANK);
+  let idx = 0;
+  const genFood = () => {
+    if (idx >= queue.length) { queue = shuffle(BANK); idx = 0; }
+    const it = queue[idx++];
+    return { display: it.w, type: it.type, kind: 'idiom' };
+  };
+  const genFoodOfType = (wantType) => {
+    const pool = BANK.filter(b => b.type === wantType);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    return { display: pick.w, type: pick.type, kind: 'idiom' };
+  };
+  return {
+    flowerTypes: [opts.typeA, opts.typeB],
+    genFood, genFoodOfType,
+    labels: opts.labels,
+    icons: opts.icons,
+    palette: opts.palette,
+  };
+}
+
+/* ========================================================================
+   音效
+   ======================================================================== */
+const AudioFx = (() => {
+  let ctx;
+  const init = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); };
+  const tone = (freq, duration, type = 'sine', gain = 0.15) => {
+    init();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+  };
+  const slide = (f1, f2, duration, type = 'sine', gain = 0.15) => {
+    init();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f1, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(f2, ctx.currentTime + duration);
+    g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+  };
+  return {
+    pickup:  () => tone(440, 0.08, 'sine', 0.12),
+    correct: () => { slide(600, 900, 0.1); setTimeout(() => slide(900, 1200, 0.08), 60); },
+    wrong:   () => slide(300, 150, 0.25, 'sawtooth', 0.12),
+    full:    () => { [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => tone(f, 0.15, 'triangle', 0.18), i * 70)); },
+    tick:    () => tone(800, 0.05, 'square', 0.08),
+    attack:  () => slide(200, 60, 0.4, 'sawtooth', 0.25),
+    bitten:  () => slide(400, 100, 0.3, 'square', 0.2),
+    victory: () => { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => setTimeout(() => tone(f, 0.15, 'triangle', 0.18), i * 100)); },
+    defeat:  () => { [400, 350, 300, 250, 200].forEach((f, i) => setTimeout(() => tone(f, 0.2, 'triangle', 0.15), i * 120)); },
+    heal:    () => tone(1200, 0.12, 'triangle', 0.1),
+  };
+})();
+
+/* ========================================================================
+   游戏状态
+   ======================================================================== */
+const state = {
+  currentLevel: null,
+  gen: null,
+  fed: 0,
+  hearts: CONFIG.START_HEARTS,
+  flowers: new Map(),
+  pool: [],
+  slots: [],
+  poolSize: CONFIG.POOL_SIZE,   // v7: 当前关卡池大小
+  foodQueue: [],
+  flowerIdSeq: 0,
+  foodIdSeq: 0,
+  playing: false,
+  spawnTimer: null,
+  lastRingUpdate: 0,
+};
+
+/* ========================================================================
+   花朵 SVG（根据 palette 和 labels 动态渲染）
+   ======================================================================== */
+function flowerSVG(type) {
+  const c = state.gen.palette[type];
+  const label = state.gen.labels[type];
+  const icon = state.gen.icons[type];
+
+  const petals = [];
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(angle) * 42;
+    const y = Math.sin(angle) * 42;
+    petals.push(`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="20" ry="26" fill="${c.petal}" stroke="${c.petalDark}" stroke-width="2.5" transform="rotate(${(i * 72 + 90).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`);
+  }
+
+  return `
+    <svg class="flower-svg" viewBox="-85 -95 170 190">
+      <path d="M 0 50 Q -6 78 0 100" stroke="#43A047" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <ellipse cx="-18" cy="70" rx="16" ry="8" fill="#66BB6A" stroke="#2E7D32" stroke-width="1.8" transform="rotate(-30 -18 70)"/>
+      <ellipse cx="16" cy="82" rx="14" ry="7" fill="#66BB6A" stroke="#2E7D32" stroke-width="1.8" transform="rotate(30 16 82)"/>
+
+      <g class="flower-core">
+        ${petals.join('')}
+        <circle class="flower-face" cx="0" cy="0" r="34" fill="${c.face}" stroke="${c.petalDark}" stroke-width="2.5"/>
+
+        <g class="flower-mouth-open">
+          <ellipse cx="0" cy="8" rx="28" ry="20" fill="${c.mouth}"/>
+          <ellipse cx="0" cy="18" rx="18" ry="9" fill="${c.tongue}"/>
+          <ellipse cx="-4" cy="15" rx="4" ry="2" fill="#FFCDD2" opacity="0.8"/>
+          <path d="M -5 -10 L -3 2 L -1 -10 Z" fill="#fff" stroke="#BDBDBD" stroke-width="1" stroke-linejoin="round"/>
+          <path d="M 1 -10 L 3 2 L 5 -10 Z" fill="#fff" stroke="#BDBDBD" stroke-width="1" stroke-linejoin="round"/>
+          <path d="M -17 -7 L -14 -1 L -11 -7 Z" fill="#fff" stroke="#BDBDBD" stroke-width="1" stroke-linejoin="round"/>
+          <path d="M 11 -7 L 14 -1 L 17 -7 Z" fill="#fff" stroke="#BDBDBD" stroke-width="1" stroke-linejoin="round"/>
+        </g>
+
+        <path class="flower-mouth-closed" d="M -22 0 Q 0 16 22 0" stroke="${c.petalDark}" stroke-width="3.5" fill="none" stroke-linecap="round" style="display:none"/>
+
+        <g class="flower-face-group">
+          <circle cx="-14" cy="-18" r="3.5" fill="#333"/>
+          <circle cx="14" cy="-18" r="3.5" fill="#333"/>
+          <circle cx="-12" cy="-20" r="1.3" fill="#fff"/>
+          <circle cx="16" cy="-20" r="1.3" fill="#fff"/>
+        </g>
+      </g>
+
+      <!-- 耐心环 -->
+      <circle cx="0" cy="0" r="50" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="9"/>
+      <circle class="countdown-ring" cx="0" cy="0" r="50" fill="none"
+              stroke="${c.ring}" stroke-width="7" stroke-linecap="round"
+              stroke-dasharray="314.16" stroke-dashoffset="0"
+              transform="rotate(-90 0 0)"/>
+
+      <!-- 标签 -->
+      <g class="flower-label" transform="translate(0 -68)">
+        <rect x="-34" y="-14" width="68" height="26" rx="13" fill="#fff" stroke="${c.petalDark}" stroke-width="2.5"/>
+        <text x="0" y="5" text-anchor="middle" font-size="14" font-weight="800" fill="${c.petalDark}" font-family="inherit">${icon} ${label}</text>
+      </g>
+
+      <!-- 吃饱进度点 -->
+      <g class="flower-bites" transform="translate(0 48)">
+        ${Array(CONFIG.BITES_TO_FULL).fill(0).map((_, i) => {
+          const x = (i - (CONFIG.BITES_TO_FULL - 1) / 2) * 10;
+          return `<circle cx="${x.toFixed(1)}" cy="0" r="3.5" fill="rgba(255,255,255,0.6)" stroke="${c.petalDark}" stroke-width="1.5" data-bite="${i}"/>`;
+        }).join('')}
+      </g>
+    </svg>
+  `;
+}
+
+/* ========================================================================
+   花朵生命周期
+   ======================================================================== */
+function spawnFlower() {
+  if (!state.playing) return;
+  if (state.flowers.size >= CONFIG.MAX_ACTIVE_FLOWERS) return;
+
+  const [typeA, typeB] = state.gen.flowerTypes;
+  const existing = [...state.flowers.values()].map(f => f.type);
+  let type;
+  if (existing.length === 0) type = Math.random() < 0.5 ? typeA : typeB;
+  else if (existing.every(t => t === typeA))  type = Math.random() < 0.7 ? typeB : typeA;
+  else if (existing.every(t => t === typeB))  type = Math.random() < 0.7 ? typeA : typeB;
+  else type = Math.random() < 0.5 ? typeA : typeB;
+
+  const id = ++state.flowerIdSeq;
+  const el = document.createElement('div');
+  el.className = 'flower spawning';
+  el.dataset.id = id;
+  el.dataset.type = type;
+  el.innerHTML = flowerSVG(type);
+
+  const pos = getAvailablePosition();
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
+
+  document.getElementById('garden').appendChild(el);
+
+  const flower = {
+    id, type, element: el,
+    bites: 0,
+    patience: 1.0,                // 0-1, 1=满血
+    lastUpdateTime: performance.now(),
+    state: 'active',
+    tickPlayed: new Set(),
+    ring: el.querySelector('.countdown-ring'),
+    biteDots: el.querySelectorAll('[data-bite]'),
+    wasUrgent: false,
+  };
+  state.flowers.set(id, flower);
+
+  ensureSolvableFood();
+
+  setTimeout(() => {
+    if (state.flowers.has(id) && flower.state === 'active') {
+      el.classList.remove('spawning');
+      el.classList.add('sway');
+    }
+  }, 500);
+}
+
+function getAvailablePosition() {
+  const existing = [...state.flowers.values()].map(f => ({
+    x: parseInt(f.element.style.left),
+    y: parseInt(f.element.style.top),
+  }));
+  const slots = [
+    { x: 15,  y: 50 },
+    { x: 205, y: 50 },
+    { x: 110, y: 210 },
+  ];
+  for (const slot of slots) {
+    const conflict = existing.some(e => Math.abs(e.x - slot.x) < 100 && Math.abs(e.y - slot.y) < 100);
+    if (!conflict) return slot;
+  }
+  return slots[0];
+}
+
+function updateFlowers(now) {
+  const shouldUpdateRing = now - state.lastRingUpdate >= CONFIG.RING_UPDATE_INTERVAL;
+  if (shouldUpdateRing) state.lastRingUpdate = now;
+
+  for (const flower of state.flowers.values()) {
+    if (flower.state !== 'active') continue;
+    const dt = now - flower.lastUpdateTime;
+    flower.lastUpdateTime = now;
+    // 耐心按 levelPatienceMs 全量耗尽速度线性流失（回退到 CONFIG 默认）
+    const patienceMs = state.currentLevel.patienceMs || CONFIG.PATIENCE_DURATION_MS;
+    flower.patience -= dt / patienceMs;
+    flower.patience = Math.max(0, flower.patience);
+
+    if (shouldUpdateRing && flower.ring) {
+      flower.ring.setAttribute('stroke-dashoffset', (314.16 * (1 - flower.patience)).toFixed(1));
+    }
+
+    if (flower.patience < CONFIG.URGENT_THRESHOLD && !flower.wasUrgent) {
+      flower.wasUrgent = true;
+      flower.element.classList.remove('sway');
+      flower.element.classList.add('urgent');
+    }
+    // 从危险恢复到安全（喂对血多了）
+    if (flower.patience >= CONFIG.URGENT_THRESHOLD && flower.wasUrgent) {
+      flower.wasUrgent = false;
+      flower.element.classList.remove('urgent');
+      flower.element.classList.add('sway');
+      flower.tickPlayed.clear();
+    }
+
+    if (flower.wasUrgent) {
+      const patienceMs = state.currentLevel.patienceMs || CONFIG.PATIENCE_DURATION_MS;
+      const remaining = Math.ceil(flower.patience * patienceMs / 1000);
+      if (remaining <= 3 && remaining > 0 && !flower.tickPlayed.has(remaining)) {
+        flower.tickPlayed.add(remaining);
+        AudioFx.tick();
+      }
+    }
+
+    if (flower.patience <= 0) triggerAttack(flower);
+  }
+}
+
+function triggerAttack(flower) {
+  flower.state = 'attacking';
+  flower.element.classList.remove('urgent', 'sway');
+  flower.element.classList.add('attacking');
+  AudioFx.attack();
+  setTimeout(() => {
+    flower.element.remove();
+    state.flowers.delete(flower.id);
+    loseHeart();
+    scheduleNextSpawn();
+  }, 600);
+}
+
+function loseHeart() {
+  state.hearts--;
+  renderHearts();
+  AudioFx.bitten();
+  const flash = document.createElement('div');
+  flash.className = 'bitten-flash';
+  flash.textContent = '啊！';
+  document.getElementById('screen').appendChild(flash);
+  setTimeout(() => flash.remove(), 800);
+  if (state.hearts <= 0) gameOver(false);
+}
+
+/* ========================================================================
+   食物池 v6：槽位固定 + 预生成队列 + 快速补位
+   ======================================================================== */
+function initPool() {
+  const pool = document.getElementById('food-pool');
+  pool.innerHTML = '';
+  // 池大小由关卡配置决定
+  const poolSize = state.currentLevel.poolSize || CONFIG.POOL_SIZE;
+  state.poolSize = poolSize;
+  // v8: flex 布局，不需要 grid-template-columns
+
+  state.pool = new Array(poolSize).fill(null);
+  state.slots = [];
+  state.foodQueue = [];
+
+  for (let i = 0; i < poolSize; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'food-slot';
+    slot.dataset.slot = i;
+    pool.appendChild(slot);
+    state.slots.push(slot);
+  }
+  refillQueue();
+  for (let i = 0; i < poolSize; i++) {
+    spawnFoodInSlot(i);
+  }
+  ensureSolvableFood();
+}
+
+// 候补队列补齐到 max(QUEUE_PREFILL, poolSize*2)
+function refillQueue() {
+  if (!state.gen) return;
+  const target = Math.max(CONFIG.QUEUE_PREFILL, (state.poolSize || CONFIG.POOL_SIZE) * 2);
+  while (state.foodQueue.length < target) {
+    state.foodQueue.push(state.gen.genFood());
+  }
+}
+
+// 从候补队列取一个（可指定类型）
+function dequeueFood(forceType = null) {
+  refillQueue();
+  if (forceType) {
+    const idx = state.foodQueue.findIndex(f => f.type === forceType);
+    if (idx >= 0) return state.foodQueue.splice(idx, 1)[0];
+    // 队列里没有该类型，现场生成（应该极少发生）
+    return state.gen.genFoodOfType(forceType);
+  }
+  return state.foodQueue.shift() || state.gen.genFood();
+}
+
+function spawnFoodInSlot(slotIdx, forceType = null) {
+  const slot = state.slots[slotIdx];
+  if (!slot) return;
+  const foodData = dequeueFood(forceType);
+  const id = ++state.foodIdSeq;
+
+  const el = document.createElement('div');
+  el.className = `food spawning ${foodData.kind}`;
+  el.dataset.id = id;
+  el.dataset.type = foodData.type;
+  el.textContent = foodData.display;
+  setTimeout(() => el.classList.remove('spawning'), 400);
+
+  slot.appendChild(el);
+
+  const food = {
+    id,
+    display: foodData.display,
+    type: foodData.type,
+    kind: foodData.kind,
+    element: el,
+    slotIdx,
+  };
+  state.pool[slotIdx] = food;
+  attachFoodDrag(food);
+
+  refillQueue();
+}
+
+/**
+ * 可解性保障（v6 加强版）：
+ * 每朵活跃花必须有 ≥MIN_SOLVABLE_PER_FLOWER 个可喂食物（给玩家选择空间，不是唯一解）
+ */
+function ensureSolvableFood() {
+  const activeTypes = new Set([...state.flowers.values()]
+    .filter(f => f.state === 'active')
+    .map(f => f.type));
+
+  for (const type of activeTypes) {
+    const have = state.pool.filter(f => f && f.type === type).length;
+    const need = CONFIG.MIN_SOLVABLE_PER_FLOWER - have;
+    if (need <= 0) continue;
+
+    // 需要补 N 个该类型食物：替换最早的"不是此类型"食物
+    for (let n = 0; n < need; n++) {
+      const replaceIdx = state.pool.findIndex(f => f && f.type !== type);
+      if (replaceIdx < 0) break;  // 全是别的无法替换（几乎不可能同屏两朵同色花）
+      const old = state.pool[replaceIdx];
+      const slotIdx = old.slotIdx;
+      old.element.classList.add('vanishing');
+      setTimeout(() => old.element.remove(), 200);
+      state.pool[replaceIdx] = null;
+      // 100ms 后填入指定类型
+      setTimeout(() => {
+        if (state.playing && !state.pool[slotIdx]) spawnFoodInSlot(slotIdx, type);
+      }, CONFIG.REFILL_DELAY_MS);
+    }
+  }
+}
+
+function removeFood(food) {
+  const idx = food.slotIdx;
+  state.pool[idx] = null;
+  food.element.classList.add('vanishing');
+  setTimeout(() => food.element.remove(), 200);
+  // 极快补位：100ms
+  setTimeout(() => {
+    if (state.playing && !state.pool[idx]) {
+      spawnFoodInSlot(idx);
+      ensureSolvableFood();
+    }
+  }, CONFIG.REFILL_DELAY_MS);
+}
+
+/* ========================================================================
+   拖拽（document 级监听，手机兼容性最佳）
+   ======================================================================== */
+let dragState = null;
+
+function onDocPointerMove(e) {
+  if (!dragState) return;
+  e.preventDefault();
+  // v8 胶囊尺寸不固定，用 translate(-50%, -50%) 自动对齐指针中心
+  dragState.ghost.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
+}
+
+function onDocPointerUp(e) {
+  if (!dragState) return;
+  const { food, ghost } = dragState;
+  document.removeEventListener('pointermove', onDocPointerMove);
+  document.removeEventListener('pointerup',   onDocPointerUp);
+  document.removeEventListener('pointercancel', onDocPointerUp);
+
+  ghost.remove();
+  food.element.style.opacity = '1';
+
+  const target = findFlowerAt(e.clientX, e.clientY);
+  dragState = null;
+  // food 有可能已被清理（同时两次触发）
+  if (target && state.pool[food.slotIdx] === food) {
+    attemptFeed(food, target);
+  }
+}
+
+function attachFoodDrag(food) {
+  const el = food.element;
+  el.addEventListener('pointerdown', (e) => {
+    if (!state.playing) return;
+    if (dragState) return;
+    e.preventDefault();
+    AudioFx.pickup();
+
+    const ghost = document.createElement('div');
+    ghost.className = `drag-ghost ${food.kind}`;
+    ghost.textContent = food.display;
+    ghost.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
+    document.body.appendChild(ghost);
+
+    dragState = { food, ghost };
+    el.style.opacity = '0.25';
+
+    document.addEventListener('pointermove', onDocPointerMove, { passive: false });
+    document.addEventListener('pointerup',   onDocPointerUp);
+    document.addEventListener('pointercancel', onDocPointerUp);
+  });
+}
+
+function findFlowerAt(x, y) {
+  for (const flower of state.flowers.values()) {
+    if (flower.state !== 'active') continue;
+    const rect = flower.element.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height * 0.42;
+    if (Math.hypot(x - cx, y - cy) < 65) return flower;
+  }
+  return null;
+}
+
+/* ========================================================================
+   喂食
+   ======================================================================== */
+function attemptFeed(food, flower) {
+  if (food.type === flower.type) feedCorrect(food, flower);
+  else feedWrong(food, flower);
+}
+
+function feedCorrect(food, flower) {
+  AudioFx.correct();
+  AudioFx.heal();
+  flower.element.classList.add('eating');
+  setTimeout(() => flower.element.classList.remove('eating'), 400);
+
+  // 耐心回血
+  flower.patience = Math.min(1, flower.patience + CONFIG.HEAL_RATIO);
+  // 回血闪光
+  flower.element.classList.add('healed');
+  setTimeout(() => flower.element.classList.remove('healed'), 500);
+
+  flower.bites++;
+  flower.biteDots.forEach((dot, idx) => {
+    if (idx < flower.bites) dot.setAttribute('fill', '#FFD600');
+  });
+
+  spawnParticle('✨', flower.element, `+1`);
+  removeFood(food);
+
+  if (flower.bites >= CONFIG.BITES_TO_FULL) becomeFull(flower);
+}
+
+function feedWrong(food, flower) {
+  AudioFx.wrong();
+  flower.state = 'stunned';
+  flower.element.classList.add('stunned');
+  flower.element.classList.remove('urgent', 'sway');
+  spawnParticle('❌', flower.element, null);
+
+  setTimeout(() => {
+    if (!state.flowers.has(flower.id)) return;
+    flower.element.classList.remove('stunned');
+    if (flower.state === 'stunned') {
+      flower.state = 'active';
+      // 眩晕期间耐心暂停：重置 lastUpdateTime 以免把眩晕时间也扣
+      flower.lastUpdateTime = performance.now();
+      if (flower.wasUrgent) flower.element.classList.add('urgent');
+      else flower.element.classList.add('sway');
+    }
+  }, CONFIG.STUN_DURATION_MS);
+}
+
+function becomeFull(flower) {
+  flower.state = 'full';
+  AudioFx.full();
+  flower.element.classList.remove('sway', 'urgent');
+  flower.element.classList.add('full-burst');
+  setTimeout(() => {
+    flower.element.classList.remove('full-burst');
+    flower.element.classList.add('full-pulse');
+  }, 1200);
+
+  const mouthOpen = flower.element.querySelector('.flower-mouth-open');
+  const mouthClosed = flower.element.querySelector('.flower-mouth-closed');
+  if (mouthOpen) mouthOpen.style.display = 'none';
+  if (mouthClosed) mouthClosed.style.display = '';
+
+  const faceGroup = flower.element.querySelector('.flower-face-group');
+  if (faceGroup) {
+    faceGroup.innerHTML = `
+      <path d="M -20 -20 Q -14 -26 -8 -20" stroke="#333" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M 8 -20 Q 14 -26 20 -20" stroke="#333" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    `;
+  }
+
+  if (flower.ring) flower.ring.setAttribute('stroke', '#FFD600');
+  const label = flower.element.querySelector('.flower-label');
+  if (label) label.style.display = 'none';
+
+  const rect = flower.element.getBoundingClientRect();
+  const screen = document.getElementById('screen');
+  const screenRect = screen.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2 - screenRect.left;
+  const cy = rect.top + rect.height * 0.4 - screenRect.top;
+
+  [0, 1].forEach(i => {
+    const halo = document.createElement('div');
+    halo.className = 'gold-halo' + (i === 1 ? ' delay' : '');
+    halo.style.left = cx + 'px';
+    halo.style.top = cy + 'px';
+    screen.appendChild(halo);
+    setTimeout(() => halo.remove(), 1100);
+  });
+  const sparkleChars = ['✨', '🌟', '⭐', '💫'];
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const distance = 80 + Math.random() * 30;
+    const sp = document.createElement('div');
+    sp.className = 'sparkle';
+    sp.style.left = cx + 'px';
+    sp.style.top = cy + 'px';
+    sp.style.setProperty('--dx', (Math.cos(angle) * distance).toFixed(1) + 'px');
+    sp.style.setProperty('--dy', (Math.sin(angle) * distance).toFixed(1) + 'px');
+    sp.textContent = sparkleChars[i % sparkleChars.length];
+    screen.appendChild(sp);
+    setTimeout(() => sp.remove(), 1000);
+  }
+  spawnParticle('🌟', flower.element, '吃饱啦！');
+
+  state.fed++;
+  updateProgress();
+
+  if (state.fed >= state.currentLevel.target) {
+    setTimeout(() => gameOver(true), 1000);
+    return;
+  }
+
+  setTimeout(() => {
+    flower.element.classList.add('dying');
+    setTimeout(() => {
+      flower.element.remove();
+      state.flowers.delete(flower.id);
+      scheduleNextSpawn();
+    }, 400);
+  }, 1200);
+}
+
+/* ========================================================================
+   UI
+   ======================================================================== */
+function spawnParticle(emoji, relEl, text) {
+  const rect = relEl.getBoundingClientRect();
+  const screen = document.getElementById('screen');
+  const screenRect = screen.getBoundingClientRect();
+  const x = rect.left + rect.width / 2 - screenRect.left;
+  const y = rect.top + rect.height * 0.3 - screenRect.top;
+
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.left = x + 'px';
+  p.style.top = y + 'px';
+  p.textContent = emoji;
+  screen.appendChild(p);
+  setTimeout(() => p.remove(), 800);
+
+  if (text) {
+    const t = document.createElement('div');
+    t.className = 'score-pop';
+    t.style.left = x + 'px';
+    t.style.top = y + 'px';
+    t.textContent = text;
+    screen.appendChild(t);
+    setTimeout(() => t.remove(), 1000);
+  }
+}
+
+function renderHearts() {
+  const container = document.getElementById('hearts');
+  container.innerHTML = '';
+  for (let i = 0; i < CONFIG.START_HEARTS; i++) {
+    const h = document.createElement('span');
+    h.className = 'heart' + (i >= state.hearts ? ' lost' : '');
+    h.textContent = '❤️';
+    container.appendChild(h);
+  }
+}
+
+function updateProgress() {
+  document.getElementById('progress').textContent = state.fed;
+  document.getElementById('target').textContent = state.currentLevel.target;
+}
+
+function scheduleNextSpawn() {
+  if (!state.playing) return;
+  if (state.flowers.size >= CONFIG.MAX_ACTIVE_FLOWERS) return;
+  clearTimeout(state.spawnTimer);
+  state.spawnTimer = setTimeout(() => {
+    if (state.playing) spawnFlower();
+  }, CONFIG.RESPAWN_DELAY_MS);
+}
+
+/* ========================================================================
+   主菜单渲染
+   ======================================================================== */
+let currentTab = 'math';
+function renderMenu() {
+  const list = document.getElementById('level-list');
+  list.innerHTML = '';
+  const levels = LEVELS[currentTab];
+  levels.forEach(lvl => {
+    const card = document.createElement('div');
+    card.className = 'level-card' + (lvl.unlocked ? '' : ' locked');
+    const iconCls = lvl.unlocked ? currentTab : 'locked';
+    const iconChar = lvl.unlocked ? (currentTab === 'math' ? '🔢' : '📖') : '🔒';
+    const stars = progress[lvl.id] || 0;
+    const starHTML = Array(3).fill(0).map((_, i) =>
+      `<span class="${i < stars ? 'star-filled' : 'star-unfilled'}">⭐</span>`
+    ).join('');
+    card.innerHTML = `
+      <div class="level-icon ${iconCls}">${iconChar}</div>
+      <div class="level-info">
+        <div class="level-name">${lvl.name}</div>
+        <div class="level-desc">${lvl.desc}${lvl.unlocked && lvl.poolSize ? ` · ${lvl.poolSize}选项 · ${Math.round((lvl.patienceMs || 18000)/1000)}秒` : ''}</div>
+      </div>
+      <div class="level-stars">${lvl.unlocked ? starHTML : ''}</div>
+    `;
+    if (lvl.unlocked) {
+      card.addEventListener('click', () => startLevel(lvl));
+    }
+    list.appendChild(card);
+  });
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.subject;
+    renderMenu();
+  });
+});
+
+/* ========================================================================
+   开始 / 结束 / 返回
+   ======================================================================== */
+function startLevel(level) {
+  state.currentLevel = level;
+  state.gen = GENERATORS[level.generator]();
+  state.fed = 0;
+  state.hearts = CONFIG.START_HEARTS;
+  state.flowers.clear();
+  state.pool = [];
+  state.foodQueue = [];   // v6
+  state.playing = true;
+
+  // 切换界面
+  document.getElementById('main-menu').style.display = 'none';
+  document.getElementById('hud').style.display = '';
+  document.getElementById('garden').style.display = '';
+  document.getElementById('food-pool').style.display = '';
+  document.getElementById('garden').innerHTML = '';
+
+  renderHearts();
+  updateProgress();
+
+  const banner = document.createElement('div');
+  banner.className = 'level-banner';
+  banner.textContent = level.name.split('·')[0].trim();
+  document.getElementById('screen').appendChild(banner);
+  setTimeout(() => banner.remove(), 2000);
+
+  initPool();
+  setTimeout(() => spawnFlower(), 400);
+  setTimeout(() => spawnFlower(), 400 + CONFIG.SPAWN_OFFSET_MS);
+
+  requestAnimationFrame(gameLoop);
+}
+
+function gameLoop() {
+  if (!state.playing) return;
+  updateFlowers(performance.now());
+  requestAnimationFrame(gameLoop);
+}
+
+function returnToMenu() {
+  state.playing = false;
+  clearTimeout(state.spawnTimer);
+  state.flowers.clear();
+  state.pool = [];
+  state.foodQueue = [];   // v6
+  document.getElementById('garden').innerHTML = '';
+  document.getElementById('food-pool').innerHTML = '';
+  document.querySelectorAll('.drag-ghost').forEach(g => g.remove());
+  dragState = null;
+  // 切回菜单
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('garden').style.display = 'none';
+  document.getElementById('food-pool').style.display = 'none';
+  document.getElementById('main-menu').style.display = '';
+  document.querySelectorAll('.modal').forEach(m => m.remove());
+  renderMenu();
+}
+
+document.getElementById('back-btn').addEventListener('click', returnToMenu);
+
+function gameOver(won) {
+  state.playing = false;
+  clearTimeout(state.spawnTimer);
+  if (won) AudioFx.victory(); else AudioFx.defeat();
+
+  const starCount = won ? state.hearts : 0;
+  // 存进度（取最大）
+  if (won) {
+    const prev = progress[state.currentLevel.id] || 0;
+    progress[state.currentLevel.id] = Math.max(prev, starCount);
+  }
+
+  const stars = Array(3).fill(0).map((_, i) =>
+    `<span class="${i < starCount ? '' : 'star-empty'}">⭐</span>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-card">
+      <div class="modal-icon">${won ? '🏆' : '🥀'}</div>
+      <div class="modal-title">${won ? '通关啦！' : '再来一次'}</div>
+      ${won ? `<div class="stars">${stars}</div>` : ''}
+      <div class="modal-desc">
+        ${won
+          ? `喂饱了 ${state.fed} 朵花<br>剩余 ${state.hearts} 颗爱心`
+          : `喂饱了 ${state.fed} / ${state.currentLevel.target} 朵花<br>别灰心，再试试吧！`}
+      </div>
+      <div class="btn-row">
+        <button class="btn secondary" id="btn-menu">返回关卡</button>
+        <button class="btn" id="btn-restart">再玩一局</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('screen').appendChild(modal);
+  document.getElementById('btn-restart').addEventListener('click', () => {
+    modal.remove();
+    startLevel(state.currentLevel);
+  });
+  document.getElementById('btn-menu').addEventListener('click', () => {
+    modal.remove();
+    returnToMenu();
+  });
+}
+
+/* ========================================================================
+   启动
+   ======================================================================== */
+renderMenu();
+
+document.addEventListener('touchmove', (e) => {
+  if (dragState) e.preventDefault();
+}, { passive: false });
+</script>
+</body>
+</html>

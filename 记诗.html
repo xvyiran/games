@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  名称：记诗（诗词连连看）v3
+  类型：场景模版（完整可运行游戏）
+  
+  v3 改动（基于 v2 反馈：C 和 B 重复，难度需细化）：
+  - 难度从 3 档拆为 5 档：A / B1 / B2 / C1 / C2
+    A  : 字序复原（单句 4×4）
+    B1 : 接一句（给上句接下句，每首接 1 句）
+    B2 : 接全文（每首 4 句连续做，每句独立 grid）= 原 B
+    C1 : 2 句一拼（4×4，单 grid 装 2 句的字，连过的字消失）
+    C2 : 全文一拼（5×5，单 grid 装 4 句字，连过消失。仅 5 字诗）
+  - 多句一 grid 机制：每句独立路径不重叠，连对一句方块淡出
+  - DFS 路径生成支持参数化 grid_size
+  - 5 个 tab 横排（尺寸缩小）
+  
+  日期：2026-04-22
+  ============================================================
+-->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>记诗 · 小学古诗 75 首</title>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --paper-color: #faf6ed;
+            --main-text: #2c2c2c;
+            --accent-pink: #ff477e;
+            --accent-blue: #00bbf9;
+            --accent-yellow: #fee440;
+            --accent-green: #00f5d4;
+            --accent-red: #d62828;
+            --ink: #1a1a1a;
+            --font-display: 'Ma Shan Zheng', 'ZCOOL KuaiLe', cursive;
+            --font-main: 'ZCOOL KuaiLe', cursive, sans-serif;
+            --font-poem: 'Ma Shan Zheng', '华文行楷', 'STKaiti', '楷体', cursive;
+        }
+
+        * { 
+            box-sizing: border-box; margin: 0; padding: 0; 
+            -webkit-user-select: none; user-select: none; 
+            -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--paper-color);
+            color: var(--main-text);
+            font-family: var(--font-main);
+            overflow: hidden;
+            touch-action: none;
+            background-image: 
+                linear-gradient(rgba(229, 215, 190, 0.5) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(229, 215, 190, 0.5) 1px, transparent 1px),
+                radial-gradient(circle at 20% 30%, rgba(214, 40, 40, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, rgba(0, 187, 249, 0.04) 0%, transparent 40%);
+            background-size: 30px 30px, 30px 30px, 100% 100%, 100% 100%;
+        }
+
+        /* 主菜单 */
+        #menu-screen {
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; padding: 24px 16px; position: relative; z-index: 10;
+            overflow-y: auto;
+        }
+        #menu-screen.hidden { display: none; }
+
+        .title-block { text-align: center; margin-bottom: 24px; position: relative; }
+        .title {
+            font-family: var(--font-display);
+            font-size: 4.5rem; font-weight: normal;
+            color: var(--ink); letter-spacing: 8px;
+            text-shadow: 4px 4px 0 var(--accent-red);
+            transform: rotate(-2deg);
+            display: inline-block;
+        }
+        .subtitle { font-size: 1rem; color: #888; margin-top: 6px; letter-spacing: 2px; }
+        .seal {
+            position: absolute; top: -10px; right: -50px;
+            background: var(--accent-red); color: #fff;
+            font-family: var(--font-display);
+            width: 56px; height: 56px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; line-height: 1;
+            transform: rotate(-12deg);
+            box-shadow: 3px 3px 0 var(--ink);
+            border: 3px solid var(--ink);
+        }
+
+        /* 5 个 tab 一排，尺寸压缩 */
+        .difficulty-tabs {
+            display: flex; gap: 8px; margin-bottom: 24px;
+            justify-content: center; flex-wrap: wrap;
+            max-width: 100%;
+        }
+        .tab-btn {
+            background: #fff; color: var(--ink); font-family: var(--font-main);
+            border: 3px solid var(--ink); padding: 10px 14px; font-size: 1rem;
+            cursor: pointer; transition: 0.1s; box-shadow: 3px 3px 0 var(--ink);
+            position: relative; min-width: 90px;
+            line-height: 1.2;
+        }
+        .tab-btn .tab-sub {
+            display: block; font-size: 0.7rem; color: #888;
+            margin-top: 2px; letter-spacing: 1px;
+        }
+        .tab-btn:active { transform: translate(3px, 3px); box-shadow: 0px 0px 0 var(--ink); }
+        .tab-btn.active { background: var(--accent-yellow); transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
+        .tab-btn.active .tab-sub { color: var(--ink); }
+
+        .challenge-panel {
+            background: #fff; border: 4px solid var(--ink);
+            padding: 24px 28px; box-shadow: 6px 6px 0 var(--ink);
+            max-width: 540px; width: 100%;
+            text-align: center;
+            transform: rotate(-0.5deg);
+        }
+        .challenge-name {
+            font-family: var(--font-display);
+            font-size: 2rem; color: var(--ink); margin-bottom: 8px;
+            letter-spacing: 4px;
+        }
+        .challenge-desc {
+            font-size: 0.95rem; color: #555; line-height: 1.7;
+            margin-bottom: 14px;
+        }
+        .challenge-stats {
+            display: flex; gap: 14px; justify-content: center;
+            margin-bottom: 18px; flex-wrap: wrap;
+        }
+        .stat-pill {
+            background: var(--paper-color); border: 2px solid var(--ink);
+            padding: 5px 12px; font-size: 0.9rem;
+        }
+        .stat-pill .pill-num { color: var(--accent-pink); font-weight: bold; font-size: 1.15rem; margin-right: 4px; }
+        .stat-pill.cleared { background: var(--accent-green); }
+
+        .preview-list {
+            text-align: left; margin: 14px 0; max-height: 160px;
+            overflow-y: auto; border: 2px dashed #aaa; padding: 8px 12px;
+            background: var(--paper-color);
+        }
+        .preview-list .preview-item {
+            font-size: 0.9rem; color: #444; padding: 3px 0;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .preview-list .preview-item .idx { color: #999; font-size: 0.78rem; min-width: 22px; }
+        .preview-list .preview-item .pname { font-family: var(--font-poem); font-size: 1rem; }
+
+        .start-btn {
+            background: var(--accent-pink); color: #fff;
+            font-family: var(--font-main);
+            border: 5px solid var(--ink); padding: 16px 36px;
+            font-size: 1.5rem; cursor: pointer; transition: 0.1s;
+            box-shadow: 6px 6px 0 var(--ink);
+            letter-spacing: 4px;
+        }
+        .start-btn:active { transform: translate(6px, 6px); box-shadow: 0 0 0 var(--ink); }
+        .start-btn:hover { background: #ff003c; }
+
+        .reset-link {
+            display: inline-block; margin-top: 12px; font-size: 0.82rem;
+            color: #999; cursor: pointer; text-decoration: underline;
+        }
+        .reset-link:hover { color: var(--accent-red); }
+
+        /* 游戏界面 */
+        #game-screen { display: none; flex-direction: column; width: 100vw; height: 100vh; }
+        
+        .top-bar {
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 8px 14px; border-bottom: 4px solid var(--ink); background: #fff; 
+            flex-shrink: 0; z-index: 20; gap: 8px;
+        }
+        .top-bar .game-title {
+            font-family: var(--font-poem);
+            font-size: 1.25rem; color: var(--ink);
+            text-align: center; flex-grow: 1;
+            line-height: 1.2;
+        }
+        .top-bar .game-title .game-author {
+            font-size: 0.85rem; color: #888; margin-left: 6px;
+            font-family: var(--font-main);
+        }
+        .top-bar .game-title .level-num {
+            display: block; font-size: 0.78rem; color: var(--accent-pink);
+            font-family: var(--font-main); margin-top: 2px; font-weight: bold;
+        }
+
+        .sys-btn {
+            background: #fff; color: var(--ink); font-family: var(--font-main);
+            border: 3px solid var(--ink); padding: 7px 14px; font-size: 0.95rem;
+            cursor: pointer; transition: 0.1s; box-shadow: 3px 3px 0 var(--ink);
+            white-space: nowrap;
+        }
+        .sys-btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+        .sys-btn.yellow { background: var(--accent-yellow); }
+        .sys-btn.green { background: var(--accent-green); }
+        .sys-btn.large { font-size: 1.25rem; padding: 12px 22px; border-width: 4px; box-shadow: 4px 4px 0 var(--ink); }
+
+        .play-area {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            padding: 10px; overflow: hidden; position: relative;
+        }
+
+        .big-progress {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 8px; width: min(85vw, 60vh);
+            font-size: 0.88rem; color: #555;
+        }
+        .big-progress .pbar {
+            flex-grow: 1; height: 12px; background: #fff;
+            border: 3px solid var(--ink); position: relative; overflow: hidden;
+        }
+        .big-progress .pbar-fill {
+            height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+            transition: width 0.4s ease-out;
+        }
+        .big-progress .combo-pill {
+            background: #fff; border: 2px solid var(--ink); padding: 2px 9px;
+            font-weight: bold; color: #ff9100; white-space: nowrap; font-size: 0.85rem;
+        }
+        .big-progress .combo-pill.fever {
+            background: var(--accent-pink); color: #fff;
+            animation: pulse 0.5s infinite alternate;
+        }
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.08); } }
+
+        .hint-area {
+            display: flex; flex-direction: column; align-items: center;
+            margin-bottom: 8px; gap: 5px; max-width: 95%;
+        }
+        .hint-prev-line {
+            font-family: var(--font-poem);
+            font-size: 1.7rem; color: var(--ink);
+            letter-spacing: 4px; line-height: 1.2;
+            background: #fff; padding: 6px 18px;
+            border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+            transform: rotate(-1deg);
+        }
+        .hint-prev-line .ellipsis-arrow {
+            color: var(--accent-red); margin-left: 10px; font-size: 1.3rem;
+        }
+        .hint-meta {
+            font-size: 0.9rem; color: #666; letter-spacing: 1px;
+        }
+        .hint-meta .meta-author {
+            background: var(--accent-yellow); padding: 2px 7px;
+            border: 2px solid var(--ink); margin: 0 4px;
+            display: inline-block; transform: rotate(-2deg);
+        }
+        .hint-meta .meta-line-counter {
+            color: var(--accent-blue); font-weight: bold; margin-left: 6px;
+        }
+
+        /* A 模式：完整目标句 */
+        .target-line-full {
+            display: flex; flex-direction: row; align-items: center; justify-content: center; 
+            gap: 0; margin-bottom: 6px; min-height: 50px;
+            font-family: var(--font-poem);
+            flex-wrap: wrap;
+        }
+        .target-char-row {
+            font-size: 2.4rem; letter-spacing: 6px; display: flex; justify-content: center;
+            line-height: 1.1;
+        }
+        .target-char-row .ch { color: #ccc; display: inline-block; transition: color 0.15s; }
+        .target-char-row .ch.done { color: var(--ink); font-weight: bold; }
+
+        /* 圆点进度（B1/B2 单排，C1/C2 多排） */
+        .progress-rows {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 4px; margin-bottom: 6px;
+        }
+        .progress-row {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; min-height: 22px;
+            transition: opacity 0.2s;
+        }
+        .progress-row.done { opacity: 0.55; }
+        .progress-row .check {
+            color: var(--accent-green); font-weight: bold; font-size: 1.1rem;
+            margin-left: 4px;
+        }
+        .progress-row .cursor {
+            color: var(--accent-pink); font-weight: bold; font-size: 0.9rem;
+            min-width: 14px; text-align: right;
+        }
+        .progress-row .cursor-spacer { min-width: 14px; display: inline-block; }
+        .progress-row .dot {
+            width: 14px; height: 14px; border-radius: 50%;
+            border: 2.5px solid var(--ink); background: #fff;
+            transition: 0.15s;
+        }
+        .progress-row .dot.filled {
+            background: var(--accent-pink);
+            transform: scale(1.18);
+        }
+        .progress-row .dot.done {
+            background: var(--accent-green);
+            border-color: #2c2c2c;
+        }
+        .progress-row .dot.error {
+            background: #ff3030;
+            animation: dotShake 0.3s;
+        }
+        @keyframes dotShake {
+            0%, 100% { transform: translateX(0) scale(1.18); }
+            25% { transform: translateX(-4px) scale(1.18); }
+            75% { transform: translateX(4px) scale(1.18); }
+        }
+
+        /* 棋盘 */
+        .board-wrapper { 
+            position: relative; width: min(85vw, 56vh); aspect-ratio: 1/1; 
+            touch-action: none; transition: 0.3s; 
+        }
+        .board-wrapper.fever-active {
+            animation: feverBorder 0.6s infinite alternate;
+            box-shadow: 0 0 30px var(--accent-pink);
+        }
+        @keyframes feverBorder {
+            0% { background-color: rgba(255, 71, 126, 0.1); }
+            50% { background-color: rgba(0, 187, 249, 0.1); }
+            100% { background-color: rgba(254, 228, 64, 0.1); }
+        }
+
+        .board {
+            position: relative; width: 100%; height: 100%;
+            display: grid; gap: 10px;
+            z-index: 2; touch-action: none; padding: 6px;
+        }
+        .board.size-4 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
+        .board.size-5 { grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); gap: 7px; padding: 5px; }
+
+        .char-block {
+            background: #fff; border: 4px solid var(--ink); color: var(--ink);
+            font-family: var(--font-poem);
+            font-size: 2rem;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: 0.1s; box-shadow: 4px 4px 0 var(--ink); 
+            position: relative; touch-action: none;
+        }
+        .board.size-5 .char-block {
+            font-size: 1.5rem;
+            border-width: 3px;
+            box-shadow: 3px 3px 0 var(--ink);
+        }
+        .char-block:nth-child(even) { transform: translateY(4px) rotate(2deg); }
+        .char-block:nth-child(3n) { transform: translateX(4px) rotate(-2deg); }
+        .char-block:nth-child(5n) { transform: translateY(-3px) rotate(-1deg); }
+
+        .char-block.selected { 
+            background: var(--accent-yellow); 
+            transform: scale(1.1) rotate(0deg) !important; z-index: 10; 
+        }
+        .char-block.error { animation: shake 0.3s; background: #ffcccc; }
+        .char-block.success { background: var(--accent-green); }
+        
+        /* 已淡出的方块（C1/C2 拼对一句后） */
+        .char-block.faded {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.45s ease-out;
+        }
+        /* 淡出过程中：先变绿再消失 */
+        .char-block.fading {
+            background: var(--accent-green) !important;
+            transform: scale(1) rotate(0deg) !important;
+            box-shadow: 4px 4px 0 var(--ink);
+            transition: opacity 0.45s ease-out, background 0.1s;
+        }
+
+        .fever-active .char-block:not(.faded) { border-color: var(--accent-pink); animation: feverPulse 0.8s infinite alternate; }
+        .fever-active .char-block.selected {
+            background: var(--accent-pink); color: #fff;
+            box-shadow: 6px 6px 0 var(--ink);
+        }
+        @keyframes feverPulse {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(2deg); box-shadow: 4px 4px 0 var(--accent-pink); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .line-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+
+        .popup-text {
+            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--accent-yellow); color: var(--ink); font-size: 1.6rem; font-weight: bold;
+            padding: 8px 18px; border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+            z-index: 1000; pointer-events: none; white-space: nowrap;
+            animation: popPop 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes popPop {
+            0% { transform: translate(-50%, -30%) scale(0.5) rotate(-5deg); opacity: 0; }
+            20% { transform: translate(-50%, -50%) scale(1.1) rotate(2deg); opacity: 1; }
+            80% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: translate(-50%, -70%) scale(0.8); opacity: 0; }
+        }
+
+        #poem-transition {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: none;
+            background: rgba(0,0,0,0.4);
+            z-index: 90;
+            justify-content: center; align-items: center;
+            pointer-events: none;
+        }
+        .transition-card {
+            background: var(--paper-color); border: 5px solid var(--ink);
+            padding: 24px 44px; box-shadow: 8px 8px 0 var(--accent-red);
+            text-align: center; max-width: 90%;
+            animation: cardFlyIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes cardFlyIn {
+            0% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
+            70% { transform: scale(1.05) rotate(2deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .transition-card .tc-label { font-size: 0.95rem; color: #888; letter-spacing: 4px; margin-bottom: 6px; }
+        .transition-card .tc-title {
+            font-family: var(--font-display);
+            font-size: 2.2rem; color: var(--ink); letter-spacing: 6px;
+            margin-bottom: 4px;
+        }
+        .transition-card .tc-author { font-size: 0.95rem; color: #666; }
+
+        .overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 100;
+            justify-content: center; align-items: center;
+        }
+        .overlay-box {
+            background: var(--paper-color); border: 4px solid var(--ink);
+            padding: 28px; box-shadow: 10px 10px 0 var(--accent-red);
+            max-width: 540px; width: 90%; text-align: center;
+            position: relative; max-height: 90vh; overflow-y: auto;
+        }
+        .overlay-box .seal-corner {
+            position: absolute; top: -15px; right: -15px;
+            background: var(--accent-red); color: #fff;
+            width: 70px; height: 70px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: var(--font-display);
+            font-size: 1.5rem; transform: rotate(-12deg);
+            border: 3px solid var(--ink);
+            box-shadow: 3px 3px 0 var(--ink);
+        }
+        .overlay-title {
+            font-family: var(--font-display);
+            font-size: 2.3rem; color: var(--accent-red); margin-bottom: 14px;
+            letter-spacing: 4px;
+        }
+        .win-stats {
+            background: #fff; border: 2px dashed var(--ink);
+            padding: 12px; margin: 14px 0;
+            font-size: 0.95rem; line-height: 1.8;
+        }
+        .win-stats .ws-num { color: var(--accent-pink); font-weight: bold; font-size: 1.2rem; }
+
+        @media (max-width: 600px) {
+            .title { font-size: 3rem; letter-spacing: 5px; }
+            .seal { width: 40px; height: 40px; font-size: 0.95rem; right: -28px; }
+            .top-bar { padding: 6px 8px; }
+            .top-bar .game-title { font-size: 1rem; }
+            .top-bar .game-title .level-num { font-size: 0.7rem; }
+            .sys-btn { font-size: 0.82rem; padding: 5px 9px; }
+            .hint-prev-line { font-size: 1.25rem; letter-spacing: 3px; padding: 5px 12px; }
+            .target-char-row { font-size: 1.6rem; letter-spacing: 4px; }
+            .progress-row .dot { width: 11px; height: 11px; border-width: 2px; }
+            .progress-row { gap: 6px; min-height: 18px; }
+            .char-block { font-size: 1.4rem; border-width: 3px; }
+            .board.size-5 .char-block { font-size: 1.05rem; border-width: 2px; }
+            .board { gap: 6px; padding: 4px; }
+            .board.size-5 { gap: 5px; }
+            .challenge-panel { padding: 18px; }
+            .challenge-name { font-size: 1.5rem; }
+            .start-btn { font-size: 1.2rem; padding: 12px 24px; }
+            .tab-btn { padding: 8px 10px; font-size: 0.88rem; min-width: 70px; }
+            .tab-btn .tab-sub { font-size: 0.62rem; }
+            .difficulty-tabs { gap: 6px; }
+            .transition-card { padding: 18px 26px; }
+            .transition-card .tc-title { font-size: 1.6rem; }
+        }
+
+        @media (max-height: 700px) {
+            .board-wrapper { width: min(75vw, 48vh); }
+            .target-char-row { font-size: 1.8rem; }
+            .hint-prev-line { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="menu-screen">
+    <div class="title-block">
+        <h1 class="title">记诗</h1>
+        <div class="seal">古韵</div>
+        <div class="subtitle">小学必背古诗 · 五档闯关</div>
+    </div>
+
+    <div class="difficulty-tabs">
+        <button class="tab-btn active" data-diff="A" onclick="switchDifficulty('A')">
+            🌱 入门<span class="tab-sub">字序复原</span>
+        </button>
+        <button class="tab-btn" data-diff="B1" onclick="switchDifficulty('B1')">
+            📖 接句<span class="tab-sub">接 1 句</span>
+        </button>
+        <button class="tab-btn" data-diff="B2" onclick="switchDifficulty('B2')">
+            📚 接全文<span class="tab-sub">每首接 4 句</span>
+        </button>
+        <button class="tab-btn" data-diff="C1" onclick="switchDifficulty('C1')">
+            🔥 双句<span class="tab-sub">2 句一拼</span>
+        </button>
+        <button class="tab-btn" data-diff="C2" onclick="switchDifficulty('C2')">
+            🏆 全文<span class="tab-sub">整首一拼</span>
+        </button>
+    </div>
+
+    <div class="challenge-panel" id="challenge-panel"></div>
+</div>
+
+<div id="game-screen">
+    <div class="top-bar">
+        <button class="sys-btn" onclick="exitGame()">← 返回</button>
+        <div class="game-title">
+            <span id="bar-poem-title">题目</span>
+            <span class="game-author" id="bar-poem-author"></span>
+            <span class="level-num" id="bar-level-num"></span>
+        </div>
+        <button class="sys-btn yellow" id="pause-btn" onclick="togglePause()">暂停</button>
+    </div>
+
+    <div class="play-area">
+        <div class="big-progress">
+            <span>🎯</span>
+            <div class="pbar"><div class="pbar-fill" id="pbar-fill"></div></div>
+            <span id="pbar-text">0/0</span>
+            <span class="combo-pill" id="combo-pill">🔥 0</span>
+        </div>
+
+        <div class="hint-area" id="hint-area"></div>
+        <div id="target-zone"></div>
+
+        <div class="board-wrapper" id="board-wrapper">
+            <canvas class="line-canvas" id="line-canvas"></canvas>
+            <div class="board" id="board"></div>
+        </div>
+    </div>
+</div>
+
+<div id="poem-transition">
+    <div class="transition-card">
+        <div class="tc-label">下一首</div>
+        <div class="tc-title" id="tc-title"></div>
+        <div class="tc-author" id="tc-author"></div>
+    </div>
+</div>
+
+<div id="pause-overlay" class="overlay">
+    <div class="overlay-box">
+        <h1 class="overlay-title">暂停中</h1>
+        <button class="sys-btn yellow large" onclick="togglePause()">▶ 继续</button>
+    </div>
+</div>
+
+<div id="win-overlay" class="overlay">
+    <div class="overlay-box">
+        <div class="seal-corner">通关</div>
+        <h1 class="overlay-title">🎉 全部完成！</h1>
+        <div class="win-stats" id="win-stats"></div>
+        <div style="margin-top: 16px;">
+            <button class="sys-btn green large" onclick="restartChallenge()">再来一次</button>
+            <button class="sys-btn yellow large" onclick="exitGame()">返回菜单</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CONFIG = {
+    GRID_TOTAL_4: 16,
+    GRID_TOTAL_5: 25,
+    
+    // 干扰字数（按当前 segment 字符总数额外加几个干扰字）
+    DECOY_BY_DIFF: {
+        A:  2,   // 5字+2=7占用，4×4还剩9
+        B1: 1,
+        B2: 1,
+        C1: 1,   // 10字+1=11占用，4×4还剩5
+        C2: 1    // 20字+1=21占用，5×5还剩4
+    },
+    
+    DECOY_POOL: '一二三人山水风云月日春秋花鸟石木青白红绿东西南北',
+    
+    TTS_LANG: 'zh-CN',
+    TTS_RATE: 0.8,
+    
+    FEVER_THRESHOLD: 3,
+    
+    DELAY_BETWEEN_LINES: 700,        // segment 切换之间
+    DELAY_BETWEEN_POEMS: 1600,       // 切首过场停留
+    DELAY_FADE_OUT: 500,             // C1/C2 字消失动画时长
+    DELAY_INSIDE_SEGMENT: 500,       // C1/C2 一句对了到下一句开始的间隔
+    
+    STORAGE_KEY: 'jishi_v3_records',
+    
+    DIFFICULTY: {
+        A:  { name: '入门 · 字序复原',     desc: '显示完整诗句，按字序在格子里拖出路径。教学性质，建立机制熟悉度。', gridSize: 4 },
+        B1: { name: '接句 · 接 1 句',      desc: '给上句，凭记忆接下句。每首随机抽 1 句考你。', gridSize: 4 },
+        B2: { name: '接全文 · 每首 4 句',  desc: '一首诗 4 句连续做，每句独立棋盘+上句提示。', gridSize: 4 },
+        C1: { name: '双句 · 2 句一拼',     desc: '同一棋盘装 2 句的字，连完第 1 句字消失，继续拼第 2 句。仅 5 字诗。', gridSize: 4 },
+        C2: { name: '全文 · 整首一拼',     desc: '同一棋盘装整首 4 句的字，连过的字消失。最硬核挑战，仅 5 字诗。', gridSize: 5 }
+    }
+};
+
+// ============================================================
+// 题库
+// ============================================================
+const POEMS = [
+    // === 5 字诗（C1/C2 用）===
+    { id: 'jingye',    title: '静夜思',     author: '李白',   lines: ['床前明月光', '疑是地上霜', '举头望明月', '低头思故乡'], len: 5 },
+    { id: 'chunxiao',  title: '春晓',       author: '孟浩然', lines: ['春眠不觉晓', '处处闻啼鸟', '夜来风雨声', '花落知多少'], len: 5 },
+    { id: 'denggu',    title: '登鹳雀楼',   author: '王之涣', lines: ['白日依山尽', '黄河入海流', '欲穷千里目', '更上一层楼'], len: 5 },
+    { id: 'minnong',   title: '悯农',       author: '李绅',   lines: ['锄禾日当午', '汗滴禾下土', '谁知盘中餐', '粒粒皆辛苦'], len: 5 },
+    { id: 'jiangxue',  title: '江雪',       author: '柳宗元', lines: ['千山鸟飞绝', '万径人踪灭', '孤舟蓑笠翁', '独钓寒江雪'], len: 5 },
+    { id: 'luchai',    title: '鹿柴',       author: '王维',   lines: ['空山不见人', '但闻人语响', '返景入深林', '复照青苔上'], len: 5 },
+    { id: 'qibu',      title: '七步诗',     author: '曹植',   lines: ['煮豆燃豆萁', '豆在釜中泣', '本是同根生', '相煎何太急'], len: 5 },
+    { id: 'feng',      title: '风',         author: '李峤',   lines: ['解落三秋叶', '能开二月花', '过江千尺浪', '入竹万竿斜'], len: 5 },
+    { id: 'chunxi',    title: '春夜喜雨',   author: '杜甫',   lines: ['好雨知时节', '当春乃发生', '随风潜入夜', '润物细无声'], len: 5 },
+    
+    // === 7 字诗（A/B1/B2 用，C1/C2 暂不支持）===
+    { id: 'yongliu',   title: '咏柳',       author: '贺知章', lines: ['碧玉妆成一树高', '万条垂下绿丝绦', '不知细叶谁裁出', '二月春风似剪刀'], len: 7 },
+    { id: 'zaofa',     title: '早发白帝城', author: '李白',   lines: ['朝辞白帝彩云间', '千里江陵一日还', '两岸猿声啼不住', '轻舟已过万重山'], len: 7 },
+    { id: 'wangshan',  title: '望庐山瀑布', author: '李白',   lines: ['日照香炉生紫烟', '遥看瀑布挂前川', '飞流直下三千尺', '疑是银河落九天'], len: 7 },
+    { id: 'jueju',     title: '绝句',       author: '杜甫',   lines: ['两个黄鹂鸣翠柳', '一行白鹭上青天', '窗含西岭千秋雪', '门泊东吴万里船'], len: 7 },
+    { id: 'zenglun',   title: '赠汪伦',     author: '李白',   lines: ['李白乘舟将欲行', '忽闻岸上踏歌声', '桃花潭水深千尺', '不及汪伦送我情'], len: 7 },
+    { id: 'songyuan',  title: '送元二使安西', author: '王维', lines: ['渭城朝雨浥轻尘', '客舍青青柳色新', '劝君更尽一杯酒', '西出阳关无故人'], len: 7 },
+    { id: 'jiuyue',    title: '九月九日忆山东兄弟', author: '王维', lines: ['独在异乡为异客', '每逢佳节倍思亲', '遥知兄弟登高处', '遍插茱萸少一人'], len: 7 },
+    { id: 'liangzhou', title: '凉州词',     author: '王之涣', lines: ['黄河远上白云间', '一片孤城万仞山', '羌笛何须怨杨柳', '春风不度玉门关'], len: 7 },
+    { id: 'huixiang',  title: '回乡偶书',   author: '贺知章', lines: ['少小离家老大回', '乡音无改鬓毛衰', '儿童相见不相识', '笑问客从何处来'], len: 7 }
+];
+
+// 难度对应的诗组（C1/C2 必须只用 5 字诗）
+const CHALLENGE_SETS = {
+    A:  ['jingye', 'chunxiao', 'denggu'],
+    B1: ['jingye', 'chunxiao', 'denggu', 'minnong', 'jiangxue', 'luchai'],
+    B2: ['jingye', 'chunxiao', 'denggu', 'minnong', 'jiangxue'],
+    C1: ['jingye', 'chunxiao', 'denggu', 'minnong', 'jiangxue'],
+    C2: ['jingye', 'chunxiao', 'denggu']
+};
+
+function getChallengePoems(diff) {
+    return CHALLENGE_SETS[diff].map(id => POEMS.find(p => p.id === id)).filter(Boolean);
+}
+
+// ============================================================
+// 通关记录
+// ============================================================
+function loadRecords() {
+    try {
+        const s = localStorage.getItem(CONFIG.STORAGE_KEY);
+        return s ? JSON.parse(s) : { A:false, B1:false, B2:false, C1:false, C2:false };
+    } catch (e) { return { A:false, B1:false, B2:false, C1:false, C2:false }; }
+}
+function saveRecords(r) {
+    try { localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(r)); } catch (e) {}
+}
+function markChallengeCleared(diff) {
+    const r = loadRecords();
+    r[diff] = true;
+    saveRecords(r);
+}
+
+// ============================================================
+// 音频与 TTS
+// ============================================================
+let audioCtx = null;
+let voicesLoaded = false;
+window.speechSynthesis.onvoiceschanged = () => { voicesLoaded = true; };
+
+function initAudio() {
+    if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (window.speechSynthesis && !voicesLoaded) {
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+        voicesLoaded = true;
+    }
+}
+document.addEventListener('pointerdown', initAudio, { once: true });
+document.addEventListener('click', initAudio, { once: true });
+
+function speakText(text, onEnd) {
+    if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.lang = CONFIG.TTS_LANG;
+    msg.rate = CONFIG.TTS_RATE;
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+    if (zhVoice) msg.voice = zhVoice;
+    if (onEnd) {
+        let settled = false;
+        const done = () => { if (settled) return; settled = true; onEnd(); };
+        msg.onend = done; msg.onerror = done;
+    }
+    window.speechSynthesis.speak(msg);
+}
+
+function playSound(type) {
+    initAudio(); if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    if (type === 'hover') {
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(200, now + 0.1); 
+        gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.3, now + 0.01); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'success') {
+        const freqs = [392, 523.25, 659.25, 783.99, 1046.50]; 
+        freqs.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now + i * 0.05);
+            gain.gain.setValueAtTime(0, now + i * 0.05); gain.gain.linearRampToValueAtTime(0.2, now + i * 0.05 + 0.02); gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.05 + 0.4);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i * 0.05); osc.stop(now + i * 0.05 + 0.4);
+        });
+    } else if (type === 'error') {
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(60, now + 0.2);
+        gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.4, now + 0.02); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.2);
+    } else if (type === 'fever') {
+        const freqs = [523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now + i * 0.08);
+            gain.gain.setValueAtTime(0, now + i * 0.08); gain.gain.linearRampToValueAtTime(0.15, now + i * 0.08 + 0.05); gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.6);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.6);
+        });
+    } else if (type === 'win') {
+        const freqs = [261.63, 329.63, 392, 523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now + i * 0.1);
+            gain.gain.setValueAtTime(0, now + i * 0.1); gain.gain.linearRampToValueAtTime(0.25, now + i * 0.1 + 0.03); gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.5);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i * 0.1); osc.stop(now + i * 0.1 + 0.5);
+        });
+    } else if (type === 'poem-clear') {
+        const freqs = [659.25, 783.99, 1046.50];
+        freqs.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, now + i * 0.07);
+            gain.gain.setValueAtTime(0, now + i * 0.07); gain.gain.linearRampToValueAtTime(0.2, now + i * 0.07 + 0.02); gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.4);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i * 0.07); osc.stop(now + i * 0.07 + 0.4);
+        });
+    }
+}
+
+// ============================================================
+// 菜单
+// ============================================================
+let currentDifficulty = 'A';
+
+function switchDifficulty(diff) {
+    currentDifficulty = diff;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === diff));
+    renderMenu();
+}
+
+function renderMenu() {
+    const diff = currentDifficulty;
+    const conf = CONFIG.DIFFICULTY[diff];
+    const poems = getChallengePoems(diff);
+    const records = loadRecords();
+    const cleared = records[diff];
+    
+    // 计算总段数（segment 数）和总句数（line 数）
+    let totalSegs = 0, totalLines = 0;
+    if (diff === 'A' || diff === 'B2') {
+        // 每首每句一个 segment
+        poems.forEach(p => { totalSegs += p.lines.length; totalLines += p.lines.length; });
+    } else if (diff === 'B1') {
+        // 每首 1 segment（接 1 句）
+        totalSegs = poems.length; totalLines = poems.length;
+    } else if (diff === 'C1') {
+        // 每首 2 segments（每段 2 句）
+        poems.forEach(p => { 
+            const segCount = Math.ceil(p.lines.length / 2);
+            totalSegs += segCount; 
+            totalLines += p.lines.length; 
+        });
+    } else if (diff === 'C2') {
+        // 每首 1 segment（全文）
+        totalSegs = poems.length;
+        poems.forEach(p => { totalLines += p.lines.length; });
+    }
+    
+    const previewHtml = poems.map((p, i) => `
+        <div class="preview-item">
+            <span class="idx">${(i+1).toString().padStart(2,'0')}.</span>
+            <span class="pname">《${p.title}》</span>
+            <span style="color:#999;">— ${p.author}</span>
+            <span style="margin-left:auto; color:#888; font-size:0.78rem;">${p.lines.length}×${p.len}字</span>
+        </div>
+    `).join('');
+    
+    document.getElementById('challenge-panel').innerHTML = `
+        <div class="challenge-name">${conf.name}</div>
+        <div class="challenge-desc">${conf.desc}</div>
+        
+        <div class="challenge-stats">
+            <div class="stat-pill"><span class="pill-num">${poems.length}</span>首</div>
+            <div class="stat-pill"><span class="pill-num">${totalSegs}</span>关</div>
+            <div class="stat-pill"><span class="pill-num">${totalLines}</span>句</div>
+            ${cleared ? '<div class="stat-pill cleared">✓ 已通关</div>' : ''}
+        </div>
+        
+        <div class="preview-list">${previewHtml}</div>
+        
+        <button class="start-btn" onclick="startChallenge('${diff}')">▶ 开始挑战</button>
+        
+        <div>
+            <span class="reset-link" onclick="resetRecords()">清除通关记录</span>
+        </div>
+    `;
+}
+
+function resetRecords() {
+    if (!confirm('确定清除所有难度的通关记录吗？')) return;
+    saveRecords({ A:false, B1:false, B2:false, C1:false, C2:false });
+    renderMenu();
+}
+
+// ============================================================
+// 游戏管理：5 档难度 + segment 抽象
+// ============================================================
+class GameManager {
+    constructor(diff) {
+        this.difficulty = diff;
+        this.gridSize = CONFIG.DIFFICULTY[diff].gridSize;
+        this.gridTotal = this.gridSize * this.gridSize;
+        this.poems = getChallengePoems(diff);
+        this.segments = this.buildSegments();   // 全部 segment 列表
+        this.currentSegmentIdx = 0;
+        this.currentSubLineIdx = 0;             // segment 内当前句
+        this.totalLines = this.segments.reduce((s, seg) => s + seg.subLineIndices.length, 0);
+        this.completedLineCount = 0;
+        
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.errors = 0;
+        this.startTime = Date.now();
+        
+        this.isPaused = false;
+        this.isGameOver = false;
+        this.isTransitioning = false;
+        
+        this.board = document.getElementById('board');
+        this.wrapper = document.getElementById('board-wrapper');
+        this.canvas = document.getElementById('line-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.targetZone = document.getElementById('target-zone');
+        this.hintEl = document.getElementById('hint-area');
+        
+        this.selectedBlocks = [];
+        this.isDragging = false;
+        this.activePointerId = null;
+        this.pointerCaptureEl = null;
+        this.currentPointerPos = null;
+        this.blocksData = new Array(this.gridTotal).fill(null);
+        this.fadedSlots = new Set();   // 已淡出的格子 idx（不参与碰撞）
+        this.sessionId = Date.now() + Math.random();
+        
+        // 设置 board class（4×4 / 5×5）
+        this.board.className = 'board size-' + this.gridSize;
+        
+        this.resizeCanvas();
+        this._resizeHandler = () => this.resizeCanvas();
+        window.addEventListener('resize', this._resizeHandler);
+        
+        this.initEvents();
+        this.loadCurrentSegment();
+    }
+    
+    teardown() {
+        document.removeEventListener('pointermove', this.handlePointerMove);
+        document.removeEventListener('pointerup', this.handlePointerUp);
+        document.removeEventListener('pointercancel', this.handlePointerUp);
+        window.removeEventListener('resize', this._resizeHandler);
+    }
+    
+    /**
+     * 根据难度构建 segment 列表
+     * segment = { poemId, subLineIndices: [int], firstLineIdxInPoem }
+     */
+    buildSegments() {
+        const segments = [];
+        for (const poem of this.poems) {
+            switch(this.difficulty) {
+                case 'A':
+                case 'B2': {
+                    // 每句 1 segment
+                    poem.lines.forEach((_, i) => {
+                        segments.push({ poemId: poem.id, subLineIndices: [i] });
+                    });
+                    break;
+                }
+                case 'B1': {
+                    // 每首 1 segment，随机选第 2-N 句
+                    const candidates = poem.lines.map((_, i) => i).filter(i => i > 0);
+                    const pickIdx = candidates[Math.floor(Math.random() * candidates.length)];
+                    segments.push({ poemId: poem.id, subLineIndices: [pickIdx] });
+                    break;
+                }
+                case 'C1': {
+                    // 每 2 句 1 segment
+                    for (let i = 0; i < poem.lines.length; i += 2) {
+                        const indices = [i];
+                        if (i + 1 < poem.lines.length) indices.push(i + 1);
+                        segments.push({ poemId: poem.id, subLineIndices: indices });
+                    }
+                    break;
+                }
+                case 'C2': {
+                    // 全文 1 segment
+                    segments.push({ 
+                        poemId: poem.id, 
+                        subLineIndices: poem.lines.map((_, i) => i) 
+                    });
+                    break;
+                }
+            }
+        }
+        return segments;
+    }
+    
+    getCurrentSegment() { return this.segments[this.currentSegmentIdx]; }
+    getCurrentPoem() {
+        const seg = this.getCurrentSegment();
+        if (!seg) return null;
+        return this.poems.find(p => p.id === seg.poemId);
+    }
+    getCurrentSubLines() {
+        const poem = this.getCurrentPoem();
+        if (!poem) return [];
+        return this.getCurrentSegment().subLineIndices.map(i => poem.lines[i]);
+    }
+    getCurrentSubLine() {
+        return this.getCurrentSubLines()[this.currentSubLineIdx];
+    }
+    /** 当前 sub-line 在原诗中的索引 */
+    getCurrentSubLineIdxInPoem() {
+        return this.getCurrentSegment().subLineIndices[this.currentSubLineIdx];
+    }
+    
+    resizeCanvas() {
+        this.canvas.width = this.board.offsetWidth;
+        this.canvas.height = this.board.offsetHeight;
+    }
+    
+    showPopupText(msg) {
+        const el = document.createElement('div');
+        el.className = 'popup-text';
+        el.textContent = msg;
+        this.wrapper.appendChild(el);
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 1500);
+    }
+    
+    updateTopBar() {
+        const poem = this.getCurrentPoem();
+        if (!poem) return;
+        document.getElementById('bar-poem-title').textContent = `《${poem.title}》`;
+        document.getElementById('bar-poem-author').textContent = '· ' + poem.author;
+        document.getElementById('bar-level-num').textContent = 
+            `第 ${this.currentSegmentIdx + 1}/${this.segments.length} 关`;
+    }
+    
+    updateProgressBar() {
+        const pct = (this.completedLineCount / this.totalLines) * 100;
+        document.getElementById('pbar-fill').style.width = pct + '%';
+        document.getElementById('pbar-text').textContent = `${this.completedLineCount}/${this.totalLines}`;
+        const comboPill = document.getElementById('combo-pill');
+        comboPill.textContent = `🔥 ${this.combo}`;
+        if (this.combo >= CONFIG.FEVER_THRESHOLD) {
+            comboPill.classList.add('fever');
+        } else {
+            comboPill.classList.remove('fever');
+        }
+    }
+    
+    /**
+     * 加载当前 segment（生成新棋盘）
+     */
+    loadCurrentSegment() {
+        this.releaseDrawCapture(this.activePointerId);
+        this.selectedBlocks = []; this.isDragging = false; 
+        this.currentPointerPos = null; this.activePointerId = null;
+        this.fadedSlots = new Set();
+        this.currentSubLineIdx = 0;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        if (this.currentSegmentIdx >= this.segments.length) {
+            this.triggerWin();
+            return;
+        }
+        
+        const subLines = this.getCurrentSubLines();
+        
+        this.updateTopBar();
+        this.updateProgressBar();
+        this.renderHintArea();
+        this.renderTargetZone();
+        
+        // 生成多句一 grid
+        const gridData = this.generateMultiLineGrid(subLines);
+        this.board.innerHTML = '';
+        this.blocksData.fill(null);
+        
+        gridData.forEach((char, idx) => {
+            if (char) {
+                const block = document.createElement('div');
+                block.className = 'char-block';
+                block.textContent = char;
+                block.dataset.index = idx;
+                this.board.appendChild(block);
+                this.blocksData[idx] = block;
+            } else {
+                this.board.appendChild(document.createElement('div'));
+            }
+        });
+        
+        // TTS
+        const sid = this.sessionId;
+        const poem = this.getCurrentPoem();
+        if (this.difficulty === 'A') {
+            // 朗读目标句
+            setTimeout(() => { if (this.sessionId === sid) speakText(subLines[0]); }, 300);
+        } else if (this.difficulty === 'B1' || this.difficulty === 'B2') {
+            // 朗读上句（如果有）
+            const firstLineInPoem = this.getCurrentSegment().subLineIndices[0];
+            if (firstLineInPoem > 0) {
+                setTimeout(() => { 
+                    if (this.sessionId === sid) speakText(poem.lines[firstLineInPoem - 1]); 
+                }, 300);
+            }
+        }
+        // C1/C2 不主动朗读
+    }
+    
+    renderHintArea() {
+        const poem = this.getCurrentPoem();
+        const seg = this.getCurrentSegment();
+        const firstLineIdx = seg.subLineIndices[0];
+        const lastLineIdx = seg.subLineIndices[seg.subLineIndices.length - 1];
+        let html = '';
+        
+        if (this.difficulty === 'A') {
+            html = `<div class="hint-meta">📖 <span class="meta-author">${poem.author}</span> · 《${poem.title}》<span class="meta-line-counter">第 ${firstLineIdx+1}/${poem.lines.length} 句</span></div>`;
+        } else if (this.difficulty === 'B1' || this.difficulty === 'B2') {
+            // B1/B2 都是单句 segment
+            if (firstLineIdx === 0) {
+                html = `<div class="hint-prev-line">《${poem.title}》<span class="ellipsis-arrow">→ ?</span></div>`;
+                html += `<div class="hint-meta">📖 <span class="meta-author">${poem.author}</span></div>`;
+            } else {
+                html = `<div class="hint-prev-line">${poem.lines[firstLineIdx-1]}<span class="ellipsis-arrow">→ ?</span></div>`;
+                html += `<div class="hint-meta">📖 <span class="meta-author">${poem.author}</span> · 《${poem.title}》</div>`;
+            }
+        } else if (this.difficulty === 'C1') {
+            // C1: 一段 2 句
+            html = `<div class="hint-prev-line">《${poem.title}》</div>`;
+            html += `<div class="hint-meta">📖 <span class="meta-author">${poem.author}</span><span class="meta-line-counter">第 ${firstLineIdx+1}-${lastLineIdx+1} 句</span></div>`;
+        } else {
+            // C2: 全文
+            html = `<div class="hint-prev-line">《${poem.title}》</div>`;
+            html += `<div class="hint-meta">📖 <span class="meta-author">${poem.author}</span><span class="meta-line-counter">全文 ${poem.lines.length} 句</span></div>`;
+        }
+        this.hintEl.innerHTML = html;
+    }
+    
+    renderTargetZone() {
+        const subLines = this.getCurrentSubLines();
+        const formed = this.selectedBlocks.map(b => b.textContent).join('');
+        const currentSubLine = this.getCurrentSubLine();
+        
+        if (this.difficulty === 'A') {
+            // 完整目标句
+            let chars = '';
+            for (let i = 0; i < currentSubLine.length; i++) {
+                const isDone = i < formed.length && formed[i] === currentSubLine[i];
+                chars += `<span class="ch ${isDone ? 'done' : ''}">${currentSubLine[i]}</span>`;
+            }
+            this.targetZone.innerHTML = `<div class="target-line-full"><div class="target-char-row">${chars}</div></div>`;
+        } else {
+            // 多排圆点（B1/B2 是单排，C1/C2 多排）
+            let html = '<div class="progress-rows">';
+            subLines.forEach((line, lineIdx) => {
+                const isDone = lineIdx < this.currentSubLineIdx;
+                const isCurrent = lineIdx === this.currentSubLineIdx;
+                
+                let dots = '';
+                for (let i = 0; i < line.length; i++) {
+                    let cls = '';
+                    if (isDone) {
+                        cls = 'done';
+                    } else if (isCurrent && i < formed.length) {
+                        const isCorrect = formed[i] === line[i];
+                        cls = isCorrect ? 'filled' : 'error';
+                    }
+                    dots += `<div class="dot ${cls}"></div>`;
+                }
+                
+                const checkmark = isDone ? '<span class="check">✓</span>' : '';
+                const cursor = isCurrent ? '<span class="cursor">▶</span>' : '<span class="cursor-spacer"></span>';
+                html += `<div class="progress-row ${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}">${cursor}${dots}${checkmark}</div>`;
+            });
+            html += '</div>';
+            this.targetZone.innerHTML = html;
+        }
+    }
+    
+    /**
+     * 多句一 grid 的字符布局：
+     * 每句独立找一条不重叠的合法路径
+     */
+    generateMultiLineGrid(subLines) {
+        const gridData = new Array(this.gridTotal).fill(null);
+        const usedSlots = new Set();
+        const paths = [];
+        
+        // 重试最多 5 次以获得更好的布局
+        let success = false;
+        let attempt = 0;
+        let bestData = null;
+        
+        while (attempt < 5 && !success) {
+            attempt++;
+            usedSlots.clear();
+            paths.length = 0;
+            let allFound = true;
+            
+            for (const line of subLines) {
+                const path = this.findPath(line.length, usedSlots);
+                if (!path) {
+                    allFound = false;
+                    break;
+                }
+                paths.push(path);
+                path.forEach(s => usedSlots.add(s));
+            }
+            
+            if (allFound) {
+                success = true;
+                gridData.fill(null);
+                subLines.forEach((line, lineIdx) => {
+                    for (let i = 0; i < line.length; i++) {
+                        gridData[paths[lineIdx][i]] = line[i];
+                    }
+                });
+            }
+        }
+        
+        // 兜底：随机填字（极端情况，应该极少触发）
+        if (!success) {
+            console.warn('[generateMultiLineGrid] DFS 找不到完整路径，启用兜底');
+            gridData.fill(null);
+            const empty = Array.from({length: this.gridTotal}, (_, i) => i);
+            empty.sort(() => Math.random() - 0.5);
+            let cursor = 0;
+            for (const line of subLines) {
+                for (let i = 0; i < line.length; i++) {
+                    gridData[empty[cursor++]] = line[i];
+                }
+            }
+            for (let i = 0; i < cursor; i++) usedSlots.add(empty[i]);
+        }
+        
+        // 干扰字
+        const decoyCount = CONFIG.DECOY_BY_DIFF[this.difficulty] || 1;
+        const allChars = subLines.join('');
+        const decoyPool = this.buildDecoyPool(allChars);
+        const emptySlots = [];
+        for (let i = 0; i < this.gridTotal; i++) {
+            if (!usedSlots.has(i)) emptySlots.push(i);
+        }
+        emptySlots.sort(() => Math.random() - 0.5);
+        for (let i = 0; i < Math.min(decoyCount, emptySlots.length); i++) {
+            if (decoyPool.length === 0) break;
+            gridData[emptySlots[i]] = decoyPool[Math.floor(Math.random() * decoyPool.length)];
+        }
+        
+        return gridData;
+    }
+    
+    /**
+     * DFS 找一条 length 步的合法路径，不踩 usedSlots
+     */
+    findPath(length, usedSlots) {
+        const gridSize = this.gridSize;
+        const total = this.gridTotal;
+        const dirs = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]];
+        
+        function dfs(curr, currentPath) {
+            if (currentPath.length === length) return currentPath;
+            const r = Math.floor(curr / gridSize), c = curr % gridSize;
+            let adjs = [];
+            for (const d of dirs) {
+                const nr = r + d[0], nc = c + d[1];
+                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize) {
+                    const next = nr * gridSize + nc;
+                    if (!usedSlots.has(next) && !currentPath.includes(next)) {
+                        adjs.push(next);
+                    }
+                }
+            }
+            adjs.sort(() => Math.random() - 0.5);
+            for (const next of adjs) {
+                const r2 = Math.floor(next / gridSize), c2 = next % gridSize;
+                let isCrossing = false;
+                if (Math.abs(r - r2) === 1 && Math.abs(c - c2) === 1) {
+                    const crossA = r * gridSize + c2;
+                    const crossB = r2 * gridSize + c;
+                    const idxA = currentPath.indexOf(crossA);
+                    const idxB = currentPath.indexOf(crossB);
+                    if (idxA !== -1 && idxB !== -1 && Math.abs(idxA - idxB) === 1) isCrossing = true;
+                }
+                if (!isCrossing) {
+                    const res = dfs(next, [...currentPath, next]);
+                    if (res) return res;
+                }
+            }
+            return null;
+        }
+        
+        const startSlots = [];
+        for (let i = 0; i < total; i++) {
+            if (!usedSlots.has(i)) startSlots.push(i);
+        }
+        startSlots.sort(() => Math.random() - 0.5);
+        for (const start of startSlots) {
+            const result = dfs(start, [start]);
+            if (result) return result;
+        }
+        return null;
+    }
+    
+    buildDecoyPool(targetChars) {
+        const targetSet = new Set(targetChars.split(''));
+        let pool;
+        if (this.difficulty === 'C1' || this.difficulty === 'C2') {
+            // C1/C2 从同首诗的其他句子抽（更迷惑）
+            const poem = this.getCurrentPoem();
+            const allLineChars = poem.lines.join('');
+            pool = allLineChars;
+        } else {
+            pool = CONFIG.DECOY_POOL;
+        }
+        const filtered = [...pool].filter(ch => !targetSet.has(ch) && ch.trim());
+        return filtered.length > 0 ? filtered : [...CONFIG.DECOY_POOL].filter(ch => !targetSet.has(ch));
+    }
+    
+    /**
+     * 路径碰撞检测（gridSize 参数化版）
+     */
+    checkSegmentCollision(idxA, idxB, obstaclesIndices) {
+        const r1 = Math.floor(idxA / this.gridSize), c1 = idxA % this.gridSize;
+        const r2 = Math.floor(idxB / this.gridSize), c2 = idxB % this.gridSize;
+        for (const idx of obstaclesIndices) {
+            if (idx === idxA || idx === idxB) continue;
+            const r3 = Math.floor(idx / this.gridSize), c3 = idx % this.gridSize;
+            const l2 = (c2 - c1) ** 2 + (r2 - r1) ** 2;
+            let dist = 0;
+            if (l2 === 0) {
+                dist = Math.sqrt((c3 - c1) ** 2 + (r3 - r1) ** 2);
+            } else {
+                let t = ((c3 - c1) * (c2 - c1) + (r3 - r1) * (r2 - r1)) / l2;
+                t = Math.max(0, Math.min(1, t));
+                const projX = c1 + t * (c2 - c1);
+                const projY = r1 + t * (r2 - r1);
+                dist = Math.sqrt((c3 - projX) ** 2 + (r3 - projY) ** 2);
+            }
+            if (dist < 0.65) return true;
+        }
+        return false;
+    }
+    isLineBlocked(idxA, idxB) {
+        const obstacles = [];
+        this.blocksData.forEach((b, i) => { 
+            // 已淡出的不算阻挡
+            if (b !== null && !this.fadedSlots.has(i)) obstacles.push(i); 
+        });
+        return this.checkSegmentCollision(idxA, idxB, obstacles);
+    }
+    
+    initEvents() {
+        this.handlePointerDown = this.onPointerDown.bind(this);
+        this.handlePointerMove = this.onPointerMove.bind(this);
+        this.handlePointerUp = this.onPointerUp.bind(this);
+        const opt = { passive: false };
+        this.board.addEventListener('pointerdown', this.handlePointerDown, opt);
+        document.addEventListener('pointermove', this.handlePointerMove, opt);
+        document.addEventListener('pointerup', this.handlePointerUp, opt);
+        document.addEventListener('pointercancel', this.handlePointerUp, opt);
+    }
+    
+    releaseDrawCapture(pointerId) {
+        if (!this.pointerCaptureEl || !this.pointerCaptureEl.releasePointerCapture) {
+            this.pointerCaptureEl = null; return;
+        }
+        const pid = pointerId != null ? pointerId : this.activePointerId;
+        if (pid == null) { this.pointerCaptureEl = null; return; }
+        try {
+            if (!this.pointerCaptureEl.hasPointerCapture || this.pointerCaptureEl.hasPointerCapture(pid)) {
+                this.pointerCaptureEl.releasePointerCapture(pid);
+            }
+        } catch (e) {}
+        this.pointerCaptureEl = null;
+    }
+    
+    getTouchedBlock(clientX, clientY) {
+        const els = document.elementsFromPoint(clientX, clientY);
+        return els.find(el => 
+            el.classList.contains('char-block') && 
+            el.parentElement === this.board &&
+            !el.classList.contains('faded') &&
+            !el.classList.contains('fading')
+        );
+    }
+    
+    onPointerDown(e) {
+        if (this.isGameOver || this.isPaused || this.isTransitioning) return;
+        if (this.isDragging) return;
+        if (e.target.classList.contains('char-block') && 
+            !e.target.classList.contains('faded') &&
+            !e.target.classList.contains('fading')) {
+            e.preventDefault();
+            this.isDragging = true;
+            this.activePointerId = e.pointerId;
+            this.pointerCaptureEl = e.target;
+            if (e.target.setPointerCapture) {
+                try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+            }
+            this.selectedBlocks = [e.target];
+            e.target.classList.add('selected');
+            playSound('hover');
+            this.updateCanvas();
+            this.renderTargetZone();
+        }
+    }
+    
+    onPointerMove(e) {
+        if (!this.board.isConnected) return;
+        if (!this.isDragging || this.isGameOver || this.isPaused || this.isTransitioning) return;
+        if (e.pointerId !== this.activePointerId) return;
+        e.preventDefault();
+        const rect = this.board.getBoundingClientRect();
+        this.currentPointerPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        const targetBlock = this.getTouchedBlock(e.clientX, e.clientY);
+        if (targetBlock && !this.selectedBlocks.includes(targetBlock)) {
+            const lastBlock = this.selectedBlocks[this.selectedBlocks.length - 1];
+            const lastIdx = parseInt(lastBlock.dataset.index);
+            const currentIdx = parseInt(targetBlock.dataset.index);
+            if (!this.isLineBlocked(lastIdx, currentIdx)) {
+                this.selectedBlocks.push(targetBlock);
+                targetBlock.classList.add('selected');
+                playSound('hover');
+                this.renderTargetZone();
+            }
+        }
+        this.updateCanvas();
+    }
+    
+    onPointerUp(e) {
+        if (!this.board.isConnected) return;
+        if (!this.isDragging || this.isGameOver || this.isPaused || this.isTransitioning) return;
+        if (e.pointerId !== this.activePointerId) return;
+        e.preventDefault();
+        this.releaseDrawCapture(e.pointerId);
+        this.isDragging = false;
+        this.activePointerId = null;
+        this.currentPointerPos = null;
+        
+        const formed = this.selectedBlocks.map(b => b.textContent).join('');
+        const targetLine = this.getCurrentSubLine();
+        
+        if (formed === targetLine) {
+            this.handleCorrect();
+        } else {
+            this.handleError();
+        }
+    }
+    
+    handleCorrect() {
+        const isMultiLineSegment = this.getCurrentSubLines().length > 1;   // C1/C2 = true
+        
+        this.combo++;
+        if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+        
+        if (this.combo >= CONFIG.FEVER_THRESHOLD) {
+            this.wrapper.classList.add('fever-active');
+            if (this.combo === CONFIG.FEVER_THRESHOLD) {
+                this.showPopupText('🔥 进入狂热模式');
+                playSound('fever');
+            } else {
+                playSound('success');
+            }
+        } else {
+            playSound('success');
+        }
+        
+        this.completedLineCount++;
+        const sid = this.sessionId;
+        
+        // C1/C2 字消失逻辑
+        if (isMultiLineSegment) {
+            // 当前路径方块淡出
+            this.selectedBlocks.forEach(b => {
+                b.classList.remove('selected');
+                b.classList.add('fading');
+                this.fadedSlots.add(parseInt(b.dataset.index));
+            });
+            // 0.5s 后真正消失（class 切换为 faded）
+            const blocksToFade = [...this.selectedBlocks];
+            setTimeout(() => {
+                blocksToFade.forEach(b => {
+                    b.classList.remove('fading');
+                    b.classList.add('faded');
+                });
+            }, CONFIG.DELAY_FADE_OUT);
+            
+            // 路径残影保留 0.5s
+            this.selectedBlocks = [];
+            setTimeout(() => {
+                if (this.sessionId !== sid) return;
+                this.updateCanvas();
+            }, CONFIG.DELAY_FADE_OUT);
+        } else {
+            // A/B1/B2 整 grid 切换：直接标 success
+            this.selectedBlocks.forEach(b => {
+                b.classList.remove('selected');
+                b.classList.add('success');
+            });
+            this.selectedBlocks = [];
+        }
+        
+        this.updateProgressBar();
+        this.currentSubLineIdx++;
+        
+        // segment 内还有句子？
+        if (this.currentSubLineIdx < this.getCurrentSubLines().length) {
+            // C1/C2 segment 内换句：刷新目标区，grid 不变
+            this.renderTargetZone();
+            // 短延迟后玩家可继续操作
+            return;
+        }
+        
+        // segment 完成，切下一个 segment
+        const currentPoemId = this.getCurrentSegment().poemId;
+        this.currentSegmentIdx++;
+        
+        if (this.currentSegmentIdx >= this.segments.length) {
+            // 全部完成
+            playSound('poem-clear');
+            setTimeout(() => {
+                if (this.sessionId !== sid) return;
+                this.triggerWin();
+            }, 600);
+            return;
+        }
+        
+        const nextPoemId = this.segments[this.currentSegmentIdx].poemId;
+        const isPoemSwitch = nextPoemId !== currentPoemId;
+        
+        if (isPoemSwitch) {
+            playSound('poem-clear');
+            const nextPoem = this.poems.find(p => p.id === nextPoemId);
+            this.showPoemTransition(nextPoem);
+            setTimeout(() => {
+                if (this.sessionId !== sid) return;
+                this.loadCurrentSegment();
+            }, CONFIG.DELAY_BETWEEN_POEMS);
+        } else {
+            // 同一首内切下一个 segment（仅 C1 会发生：第1段→第2段）
+            setTimeout(() => {
+                if (this.sessionId !== sid) return;
+                this.loadCurrentSegment();
+            }, CONFIG.DELAY_BETWEEN_LINES);
+        }
+    }
+    
+    handleError() {
+        playSound('error');
+        this.combo = 0;
+        this.errors++;
+        this.wrapper.classList.remove('fever-active');
+        this.updateProgressBar();
+        this.selectedBlocks.forEach(b => {
+            b.classList.remove('selected'); b.classList.add('error');
+            setTimeout(() => b.classList.remove('error'), 300);
+        });
+        
+        // 圆点先红一下再清空
+        this.renderTargetZone();
+        const sid = this.sessionId;
+        setTimeout(() => {
+            if (this.sessionId !== sid) return;
+            this.selectedBlocks = [];
+            this.renderTargetZone();
+            this.updateCanvas();
+        }, 300);
+    }
+    
+    showPoemTransition(poem) {
+        this.isTransitioning = true;
+        document.getElementById('tc-title').textContent = `《${poem.title}》`;
+        document.getElementById('tc-author').textContent = '— ' + poem.author;
+        const overlay = document.getElementById('poem-transition');
+        overlay.style.display = 'flex';
+        const card = overlay.querySelector('.transition-card');
+        card.style.animation = 'none';
+        void card.offsetWidth;
+        card.style.animation = 'cardFlyIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            this.isTransitioning = false;
+        }, CONFIG.DELAY_BETWEEN_POEMS - 100);
+    }
+    
+    updateCanvas() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this.selectedBlocks.length === 0) return;
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = 'rgba(255, 71, 126, 0.8)';
+        this.ctx.lineWidth = this.gridSize === 5 ? 11 : 14; 
+        this.ctx.lineCap = 'square'; this.ctx.lineJoin = 'miter';
+        const getCenter = (el) => {
+            const rect = el.getBoundingClientRect(), boardRect = this.board.getBoundingClientRect();
+            return { x: rect.left - boardRect.left + rect.width / 2, y: rect.top - boardRect.top + rect.height / 2 };
+        };
+        const start = getCenter(this.selectedBlocks[0]);
+        this.ctx.moveTo(start.x, start.y);
+        for (let i = 1; i < this.selectedBlocks.length; i++) {
+            const p = getCenter(this.selectedBlocks[i]);
+            this.ctx.lineTo(p.x, p.y);
+        }
+        if (this.isDragging && this.currentPointerPos) {
+            this.ctx.lineTo(this.currentPointerPos.x, this.currentPointerPos.y);
+        }
+        this.ctx.stroke();
+    }
+    
+    triggerWin() {
+        if (this.isGameOver) return;
+        this.isGameOver = true;
+        markChallengeCleared(this.difficulty);
+        playSound('win');
+        
+        const elapsedSec = Math.floor((Date.now() - this.startTime) / 1000);
+        const minutes = Math.floor(elapsedSec / 60);
+        const seconds = elapsedSec % 60;
+        const accuracy = Math.round((this.completedLineCount / (this.completedLineCount + this.errors)) * 100) || 100;
+        
+        document.getElementById('win-stats').innerHTML = `
+            <div>共完成：<span class="ws-num">${this.totalLines}</span> 句</div>
+            <div>最高连击：<span class="ws-num">${this.maxCombo}</span></div>
+            <div>失误：<span class="ws-num">${this.errors}</span> 次</div>
+            <div>正确率：<span class="ws-num">${accuracy}%</span></div>
+            <div>用时：<span class="ws-num">${minutes}分${seconds}秒</span></div>
+        `;
+        document.getElementById('win-overlay').style.display = 'flex';
+    }
+}
+
+// ============================================================
+// 全局控制
+// ============================================================
+let currentGame = null;
+
+function startChallenge(diff) {
+    initAudio();
+    document.getElementById('menu-screen').classList.add('hidden');
+    document.getElementById('game-screen').style.display = 'flex';
+    document.getElementById('win-overlay').style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('poem-transition').style.display = 'none';
+    
+    if (currentGame) currentGame.teardown();
+    currentGame = new GameManager(diff);
+}
+
+function restartChallenge() {
+    if (!currentGame) return;
+    const diff = currentGame.difficulty;
+    startChallenge(diff);
+}
+
+function exitGame() {
+    if (currentGame) {
+        currentGame.isGameOver = true;
+        currentGame.teardown();
+        currentGame = null;
+    }
+    window.speechSynthesis.cancel();
+    document.getElementById('game-screen').style.display = 'none';
+    document.getElementById('win-overlay').style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('poem-transition').style.display = 'none';
+    document.getElementById('menu-screen').classList.remove('hidden');
+    renderMenu();
+}
+
+function togglePause() {
+    if (!currentGame || currentGame.isGameOver) return;
+    currentGame.isPaused = !currentGame.isPaused;
+    const overlay = document.getElementById('pause-overlay');
+    const btn = document.getElementById('pause-btn');
+    if (currentGame.isPaused) {
+        overlay.style.display = 'flex'; btn.textContent = '继续';
+    } else {
+        overlay.style.display = 'none'; btn.textContent = '暂停';
+    }
+}
+
+document.addEventListener('contextmenu', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('selectstart', (e) => e.preventDefault(), { passive: false });
+
+renderMenu();
+</script>
+</body>
+</html>

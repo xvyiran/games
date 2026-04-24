@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<!--
+  名称：音节果汁屋 · V0.1 Demo
+  用途：验证 Jolly Phonics Group 1 拼读游戏核心循环
+  参考来源：Jolly Phonics Group 1 教学体系 / 前期机制讨论
+  可调参数：见文件顶部 CONFIG 块
+  类型标签：场景模版
+  日期：2026-04-23
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>音节果汁屋 · Juicy Phonics Bar</title>
+
+<!-- 字体：Fraunces 作显示字体（温暖的 variable serif），Fredoka 作 UI 字体（圆润可爱） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================================
+   CONFIG - 集中管理参数（JS 中也有对应 CONFIG 对象）
+   ========================================================================== */
+:root {
+  /* --- 音素颜色（Group 1 六音，色轮 60° 间隔）--- */
+  --color-s: #E63946;  /* 草莓红 */
+  --color-a: #F77F00;  /* 芒果橙 */
+  --color-t: #F4C430;  /* 香蕉黄 */
+  --color-i: #06A77D;  /* 青苹绿 */
+  --color-p: #118AB2;  /* 蓝莓蓝 */
+  --color-n: #8B5CF6;  /* 葡萄紫 */
+
+  /* --- 场景颜色（cozy 果汁屋）--- */
+  --bg-warm: #FDF6E8;        /* 奶油色主背景 */
+  --bg-cream: #F5E8D0;       /* 浅米黄 */
+  --wood-dark: #6B4226;      /* 深棕木 */
+  --wood-mid: #A67B5B;       /* 中棕木 */
+  --wood-light: #D4A574;     /* 浅棕木 */
+  --counter-top: #8B5A2B;    /* 吧台桌面 */
+  --text-dark: #3E2723;      /* 深棕文字 */
+  --text-soft: #7B5E42;      /* 浅棕文字 */
+  --glass-tint: rgba(255,255,255,0.85);
+  --glass-stroke: rgba(62, 39, 35, 0.35);
+
+  /* --- 毒药 --- */
+  --poison-green: #4A7C59;
+  --poison-dark: #2C4A30;
+}
+
+/* ==========================================================================
+   基础样式
+   ========================================================================== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Fredoka', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--text-dark);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(247, 127, 0, 0.08), transparent 45%),
+    radial-gradient(ellipse at 80% 15%, rgba(230, 57, 70, 0.06), transparent 45%),
+    linear-gradient(180deg, #FDF6E8 0%, #F5E8D0 100%);
+}
+
+/* ==========================================================================
+   游戏容器
+   ========================================================================== */
+.game-container {
+  max-width: 480px;
+  height: 100vh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg-warm);
+  box-shadow: 0 0 40px rgba(107, 66, 38, 0.15);
+  overflow: hidden;
+}
+
+/* --- 顶部导航 --- */
+.nav-bar {
+  padding: 16px 20px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(180deg, #FDF6E8 0%, transparent 100%);
+  z-index: 10;
+}
+
+.shop-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-size: 22px;
+  font-style: italic;
+  color: var(--text-dark);
+  letter-spacing: -0.5px;
+}
+
+.shop-title .emoji {
+  margin-right: 4px;
+  font-style: normal;
+}
+
+.level-indicator {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-soft);
+  background: rgba(255,255,255,0.6);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(107, 66, 38, 0.15);
+}
+
+/* ==========================================================================
+   舞台区域
+   ========================================================================== */
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* --- 顾客区 --- */
+.customer-area {
+  flex: 0 0 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  padding: 10px 20px;
+}
+
+.customer-stage {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 顾客气泡（显示单词） */
+.speech-bubble {
+  background: white;
+  border: 2px solid var(--text-dark);
+  border-radius: 24px;
+  padding: 10px 22px;
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-size: 28px;
+  color: var(--text-dark);
+  letter-spacing: 2px;
+  box-shadow: 3px 3px 0 var(--text-dark);
+  position: relative;
+  min-width: 80px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.speech-bubble.visible { opacity: 1; transform: translateY(0); }
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 12px solid var(--text-dark);
+}
+.speech-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid white;
+  z-index: 1;
+}
+
+/* 顾客头像 + 情绪环 */
+.customer-avatar-wrap {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  transition: transform 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+
+.customer-avatar-wrap.entering { animation: slide-in 0.6s cubic-bezier(.34,1.56,.64,1); }
+.customer-avatar-wrap.leaving-happy { animation: slide-out-happy 0.7s ease-in forwards; }
+.customer-avatar-wrap.leaving-angry { animation: slide-out-angry 0.7s ease-in forwards; }
+
+@keyframes slide-in {
+  0% { transform: translateX(120px) rotate(-10deg); opacity: 0; }
+  100% { transform: translateX(0) rotate(0); opacity: 1; }
+}
+@keyframes slide-out-happy {
+  0% { transform: translateX(0) rotate(0); opacity: 1; }
+  100% { transform: translateX(-180px) rotate(-20deg); opacity: 0; }
+}
+@keyframes slide-out-angry {
+  0% { transform: translateX(0) rotate(0); opacity: 1; }
+  50% { transform: translateX(20px) rotate(5deg); }
+  100% { transform: translateX(180px) rotate(20deg); opacity: 0; }
+}
+
+.customer-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FFD89B, #FFA17F);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 54px;
+  border: 3px solid var(--text-dark);
+  box-shadow: 2px 2px 0 var(--text-dark);
+  position: relative;
+  z-index: 2;
+}
+
+/* 情绪环 */
+.mood-ring {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 106px;
+  height: 106px;
+  transform: rotate(-90deg);
+  z-index: 1;
+}
+.mood-ring circle { fill: none; stroke-width: 4; }
+.mood-ring .track { stroke: rgba(107, 66, 38, 0.15); }
+.mood-ring .progress {
+  stroke: var(--color-i);
+  stroke-linecap: round;
+  transition: stroke 0.3s;
+}
+.mood-ring.impatient .progress { stroke: var(--color-a); }
+.mood-ring.angry .progress { stroke: var(--color-s); }
+
+/* 情绪表情（叠在头像右下） */
+.mood-emoji {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 22px;
+  background: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--text-dark);
+  z-index: 3;
+  transition: transform 0.3s;
+}
+
+/* 提示图（Easy 模式，在顾客旁边） */
+.hint-image {
+  position: absolute;
+  right: 20px;
+  top: 30px;
+  font-size: 44px;
+  background: white;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--text-dark);
+  box-shadow: 2px 2px 0 var(--text-dark);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.4s, transform 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+.hint-image.visible { opacity: 1; transform: scale(1); }
+
+/* ==========================================================================
+   工作台 + 杯子
+   ========================================================================== */
+.counter-area {
+  flex: 0 0 220px;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  padding: 0 24px 24px;
+  position: relative;
+}
+
+/* 杯子容器 */
+.main-cup-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.cup-label {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--text-soft);
+  letter-spacing: 0.5px;
+}
+
+.main-cup {
+  position: relative;
+  width: 120px;
+  height: 150px;
+  cursor: pointer;
+}
+
+.cup-svg { width: 100%; height: 100%; }
+
+/* 杯内格子：独立元素叠在 SVG 上以便精确控制 */
+.cup-layers {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column-reverse; /* 从下往上填 */
+  border-radius: 4px 4px 16px 16px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cup-layer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-size: 26px;
+  color: white;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.3);
+  position: relative;
+  transition: background 0.4s;
+}
+
+/* 液体流入动画 */
+@keyframes liquid-pour {
+  0% { transform: translateY(-100%); opacity: 0; }
+  60% { transform: translateY(0); opacity: 1; }
+  80% { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+.cup-layer.pouring {
+  animation: liquid-pour 0.5s cubic-bezier(.4,0,.2,1);
+}
+
+/* 闪色提示动画 */
+@keyframes flash-layer {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.cup-layer.flashing {
+  animation: flash-layer var(--flash-duration, 1500ms) ease-in-out;
+}
+
+/* 暂存杯 */
+.parking-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.parking-label {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--text-soft);
+  letter-spacing: 0.5px;
+}
+
+.parking-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.parking-slot {
+  width: 56px;
+  height: 42px;
+  border: 2px dashed rgba(107, 66, 38, 0.3);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-size: 20px;
+  color: white;
+  background: transparent;
+  transition: all 0.2s;
+  cursor: default;
+}
+.parking-slot.filled {
+  border: 2px solid var(--text-dark);
+  border-style: solid;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--text-dark);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+}
+.parking-slot.filled:hover { transform: translateY(-2px); }
+.parking-slot.filled:active { transform: translateY(0); }
+
+/* 满杯判定 - 成功 */
+.main-cup.success .cup-layers {
+  animation: cup-success 0.6s ease-out;
+}
+@keyframes cup-success {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* 满杯判定 - 失败（毒药） */
+.cup-layer.poison {
+  background: var(--poison-green) !important;
+  animation: poison-bubble 0.8s ease-out;
+}
+@keyframes poison-bubble {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(0.7) hue-rotate(20deg); }
+  100% { filter: brightness(0.9); }
+}
+
+/* 水果装饰 - 成功时从上方掉落 */
+.fruit-rain {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-size: 28px;
+  animation: fruit-drop 0.8s cubic-bezier(.5,0,.75,0) forwards;
+}
+@keyframes fruit-drop {
+  0% { top: -30px; opacity: 0; }
+  30% { opacity: 1; }
+  100% { top: 30px; opacity: 0; }
+}
+
+/* 毒药烟雾 */
+.poison-smoke {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-size: 20px;
+  animation: smoke-rise 1.2s ease-out forwards;
+}
+@keyframes smoke-rise {
+  0% { top: 20px; opacity: 0; }
+  30% { opacity: 0.8; transform: translateX(-50%) scale(0.8); }
+  100% { top: -40px; opacity: 0; transform: translateX(-50%) scale(1.8); }
+}
+
+/* ==========================================================================
+   吧台 + 瓶子
+   ========================================================================== */
+.counter-bar {
+  height: 14px;
+  background:
+    linear-gradient(180deg,
+      var(--counter-top) 0%,
+      var(--wood-dark) 50%,
+      var(--wood-dark) 100%);
+  position: relative;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+}
+.counter-bar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: rgba(255,255,255,0.25);
+}
+
+.bottles-area {
+  flex: 1;
+  padding: 30px 16px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 8px;
+  background:
+    linear-gradient(180deg,
+      transparent 0%,
+      rgba(139, 90, 43, 0.08) 100%);
+}
+
+/* 瓶子 */
+.bottle {
+  position: relative;
+  width: 54px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  flex: 0 0 auto;
+}
+.bottle:hover { transform: translateY(-4px); }
+.bottle.pouring { animation: bottle-tilt 0.5s ease-in-out; }
+@keyframes bottle-tilt {
+  0% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-10px) rotate(-18deg); }
+  60% { transform: translateY(-10px) rotate(-18deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+.bottle-svg {
+  width: 100%;
+  height: 110px;
+  display: block;
+  filter: drop-shadow(2px 3px 0 rgba(62, 39, 35, 0.5));
+}
+
+.bottle-label {
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-style: italic;
+  font-size: 11px;
+  color: var(--text-soft);
+  text-align: center;
+  margin-top: 4px;
+  letter-spacing: 0.3px;
+}
+
+/* 金币浮动动画 */
+.coin-float {
+  position: absolute;
+  font-size: 22px;
+  font-weight: 700;
+  color: #FFC107;
+  text-shadow: 1px 1px 0 var(--text-dark);
+  pointer-events: none;
+  animation: coin-rise 1s ease-out forwards;
+  z-index: 50;
+}
+@keyframes coin-rise {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-80px) scale(1); opacity: 0; }
+}
+
+/* ==========================================================================
+   结算页
+   ========================================================================== */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(62, 39, 35, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.overlay.visible { opacity: 1; pointer-events: all; }
+
+.overlay-card {
+  background: var(--bg-warm);
+  border-radius: 24px;
+  padding: 32px 28px;
+  width: calc(100% - 48px);
+  max-width: 360px;
+  border: 3px solid var(--text-dark);
+  box-shadow: 4px 4px 0 var(--text-dark);
+  text-align: center;
+  transform: scale(0.8);
+  transition: transform 0.4s cubic-bezier(.34,1.56,.64,1);
+}
+.overlay.visible .overlay-card { transform: scale(1); }
+
+.overlay-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-style: italic;
+  font-size: 28px;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+}
+
+.overlay-subtitle {
+  font-size: 14px;
+  color: var(--text-soft);
+  margin-bottom: 24px;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 24px;
+}
+
+.stat-item {
+  text-align: center;
+}
+.stat-label {
+  font-size: 11px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-size: 32px;
+  color: var(--text-dark);
+}
+
+.word-list {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+.word-chip {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-style: italic;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: white;
+  border: 2px solid var(--text-dark);
+}
+.word-chip.correct { background: #D4F1D4; }
+.word-chip.failed { background: #F1D4D4; }
+
+.btn-primary {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: white;
+  background: var(--color-a);
+  border: 2px solid var(--text-dark);
+  border-radius: 16px;
+  padding: 12px 32px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--text-dark);
+  transition: all 0.1s;
+}
+.btn-primary:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--text-dark); }
+.btn-primary:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--text-dark); }
+
+/* 开始页 */
+.start-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(247, 127, 0, 0.15), transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(230, 57, 70, 0.1), transparent 50%),
+    var(--bg-warm);
+  z-index: 200;
+  transition: opacity 0.6s;
+}
+.start-screen.hidden { opacity: 0; pointer-events: none; }
+
+.start-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-style: italic;
+  font-size: 42px;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+  text-align: center;
+  line-height: 1.1;
+}
+.start-sub {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--text-soft);
+  margin-bottom: 40px;
+}
+
+.start-fruits {
+  font-size: 48px;
+  margin-bottom: 30px;
+  letter-spacing: 8px;
+}
+
+.start-desc {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.7;
+  text-align: center;
+  margin-bottom: 30px;
+  max-width: 320px;
+}
+
+.start-desc strong { color: var(--text-dark); }
+
+/* 成功/失败的临时提示 */
+.flash-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Fraunces', serif;
+  font-weight: 800;
+  font-style: italic;
+  font-size: 42px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 80;
+}
+.flash-toast.show {
+  animation: toast-pop 1s ease-out forwards;
+}
+@keyframes toast-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  60% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+}
+
+/* 防止移动端橡皮筋 */
+.stage, .game-container { touch-action: manipulation; }
+
+</style>
+</head>
+<body>
+
+<div class="game-container" id="game">
+
+  <!-- 顶部导航 -->
+  <header class="nav-bar">
+    <div class="shop-title"><span class="emoji">🍓</span>音节果汁屋</div>
+    <div class="level-indicator" id="levelIndicator">1 / 3</div>
+  </header>
+
+  <!-- 舞台 -->
+  <main class="stage">
+
+    <!-- 顾客区 -->
+    <section class="customer-area">
+      <div class="customer-stage">
+        <div class="speech-bubble" id="speechBubble">sat</div>
+        <div class="customer-avatar-wrap" id="customerAvatarWrap">
+          <svg class="mood-ring" id="moodRing" viewBox="0 0 106 106">
+            <circle class="track" cx="53" cy="53" r="49" />
+            <circle class="progress" id="moodProgress" cx="53" cy="53" r="49"
+                    stroke-dasharray="307.9" stroke-dashoffset="0" />
+          </svg>
+          <div class="customer-avatar" id="customerAvatar">🐰</div>
+          <div class="mood-emoji" id="moodEmoji">😊</div>
+        </div>
+      </div>
+      <div class="hint-image" id="hintImage">🪑</div>
+    </section>
+
+    <!-- 工作台 -->
+    <section class="counter-area">
+      <!-- 主杯子 -->
+      <div class="main-cup-wrap">
+        <div class="cup-label">ORDER · 订单</div>
+        <div class="main-cup" id="mainCup">
+          <!-- 杯身 SVG -->
+          <svg class="cup-svg" viewBox="0 0 120 150">
+            <!-- 杯子轮廓 -->
+            <path d="M 18 18 Q 18 15 22 15 L 98 15 Q 102 15 102 18 L 95 130 Q 93 140 82 140 L 38 140 Q 27 140 25 130 Z"
+                  fill="rgba(255,255,255,0.3)"
+                  stroke="rgba(62, 39, 35, 0.45)"
+                  stroke-width="2.5"
+                  stroke-linejoin="round"/>
+            <!-- 杯口椭圆 -->
+            <ellipse cx="60" cy="17" rx="42" ry="5"
+                     fill="none"
+                     stroke="rgba(62, 39, 35, 0.45)"
+                     stroke-width="2.5"/>
+            <!-- 杯身高光 -->
+            <path d="M 30 25 L 28 120" stroke="rgba(255,255,255,0.6)" stroke-width="3" stroke-linecap="round" fill="none"/>
+          </svg>
+          <!-- 液体层叠（动态生成）-->
+          <div class="cup-layers" id="cupLayers"></div>
+        </div>
+      </div>
+
+      <!-- 暂存杯 -->
+      <div class="parking-wrap">
+        <div class="parking-label">SIDE · 暂存</div>
+        <div class="parking-slots" id="parkingSlots">
+          <div class="parking-slot" data-index="0"></div>
+          <div class="parking-slot" data-index="1"></div>
+          <div class="parking-slot" data-index="2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 吧台横板 -->
+    <div class="counter-bar"></div>
+
+    <!-- 瓶子区 -->
+    <section class="bottles-area" id="bottlesArea">
+      <!-- 瓶子由 JS 生成 -->
+    </section>
+
+    <!-- 成功/失败飘字 -->
+    <div class="flash-toast" id="flashToast"></div>
+  </main>
+
+  <!-- 结算页 -->
+  <div class="overlay" id="levelOverlay">
+    <div class="overlay-card">
+      <div class="overlay-title" id="overlayTitle">打烊啦！</div>
+      <div class="overlay-subtitle" id="overlaySubtitle">今天营业结束</div>
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-label">完成</div>
+          <div class="stat-value" id="statCompleted">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">金币</div>
+          <div class="stat-value" id="statCoins">0</div>
+        </div>
+      </div>
+      <div class="word-list" id="wordList"></div>
+      <button class="btn-primary" id="btnReplay">再来一关</button>
+    </div>
+  </div>
+
+  <!-- 开始页 -->
+  <div class="start-screen" id="startScreen">
+    <div class="start-fruits">🍓🥭🍋🍏🫐🍇</div>
+    <div class="start-title">音节果汁屋</div>
+    <div class="start-sub">Juicy Phonics Bar · V0.1</div>
+    <div class="start-desc">
+      顾客说出果汁名字（例如 <strong>"sat"</strong>），<br>
+      按<strong>正确顺序</strong>点击瓶子倒入杯子。<br><br>
+      满杯才会判定——<strong>倒错可以从杯里拿回暂存</strong>。
+    </div>
+    <button class="btn-primary" id="btnStart">开始营业</button>
+  </div>
+
+</div>
+
+<script>
+/* ==========================================================================
+   CONFIG - JS 端参数
+   ========================================================================== */
+const CONFIG = {
+  // 关卡
+  WORDS_PER_LEVEL: 3,
+  SECONDS_PER_WORD: 10,          // V0.1 放松到 10 秒，等 playtest 后再收紧
+  COINS_PER_WORD: 10,
+
+  // 音素（Group 1 六音）
+  PHONOGRAMS: {
+    's': { color: 'var(--color-s)', phoneme: 'sss' },
+    'a': { color: 'var(--color-a)', phoneme: 'æ' },
+    't': { color: 'var(--color-t)', phoneme: 'tuh' },
+    'i': { color: 'var(--color-i)', phoneme: 'ih' },
+    'p': { color: 'var(--color-p)', phoneme: 'puh' },
+    'n': { color: 'var(--color-n)', phoneme: 'nnn' },
+  },
+  PHONOGRAM_ORDER: ['s', 'a', 't', 'i', 'p', 'n'],
+
+  // 词库（Group 1 可拼词）
+  WORD_POOL: ['sat', 'sit', 'pit', 'pat', 'pan', 'tan', 'tap', 'tip', 'nip', 'sip'],
+
+  // 单词图片（emoji 占位）
+  WORD_HINTS: {
+    sat: '🪑', sit: '🧘', pit: '🕳️', pat: '👋',
+    pan: '🍳', tan: '🌞', tap: '🚰', tip: '💡',
+    nip: '🦀', sip: '🥤'
+  },
+
+  // 顾客头像池
+  CUSTOMER_AVATARS: ['🐰', '🐻', '🦊', '🐼', '🐸', '🐨', '🐯', '🐶', '🐱'],
+
+  // Easy 模式闪色
+  FLASH_DURATION_MS: 1500,
+  FLASH_DELAY_BEFORE_MS: 800,    // 顾客说完后多久开始闪
+
+  // 暂存杯
+  PARKING_SLOTS: 3,
+
+  // 情绪阈值（时间消耗比例）
+  MOOD_NORMAL_UNTIL: 0.6,
+  MOOD_IMPATIENT_UNTIL: 0.85,
+};
+
+/* ==========================================================================
+   游戏状态
+   ========================================================================== */
+const state = {
+  phase: 'idle',                 // idle | prompting | flashing | playing | judging | transitioning | levelEnd
+  levelWords: [],                // 本关单词列表
+  wordIndex: 0,
+  currentWord: '',
+  cupCapacity: 0,
+  cup: [],                       // 杯中音节数组（索引 0 = 底层）
+  parking: [],                   // 暂存杯
+  timerId: null,
+  timeLeft: 0,                   // 当前单词剩余秒数
+  timeTotal: 0,
+  completed: [],                 // 成功的词
+  failed: [],                    // 失败（毒药清空算一次）或超时的词
+  coins: 0,
+};
+
+/* ==========================================================================
+   DOM 引用
+   ========================================================================== */
+const $ = (id) => document.getElementById(id);
+const el = {
+  startScreen: $('startScreen'),
+  btnStart: $('btnStart'),
+  btnReplay: $('btnReplay'),
+  levelIndicator: $('levelIndicator'),
+  speechBubble: $('speechBubble'),
+  customerAvatar: $('customerAvatar'),
+  customerAvatarWrap: $('customerAvatarWrap'),
+  moodRing: $('moodRing'),
+  moodProgress: $('moodProgress'),
+  moodEmoji: $('moodEmoji'),
+  hintImage: $('hintImage'),
+  mainCup: $('mainCup'),
+  cupLayers: $('cupLayers'),
+  parkingSlots: $('parkingSlots'),
+  bottlesArea: $('bottlesArea'),
+  flashToast: $('flashToast'),
+  levelOverlay: $('levelOverlay'),
+  overlayTitle: $('overlayTitle'),
+  overlaySubtitle: $('overlaySubtitle'),
+  statCompleted: $('statCompleted'),
+  statCoins: $('statCoins'),
+  wordList: $('wordList'),
+};
+
+/* ==========================================================================
+   瓶子初始化（SVG 生成）
+   ========================================================================== */
+function buildBottles() {
+  el.bottlesArea.innerHTML = '';
+  CONFIG.PHONOGRAM_ORDER.forEach(letter => {
+    const wrap = document.createElement('div');
+    wrap.className = 'bottle';
+    wrap.dataset.letter = letter;
+
+    const color = getComputedStyle(document.documentElement)
+      .getPropertyValue(`--color-${letter}`).trim();
+
+    wrap.innerHTML = `
+      <svg class="bottle-svg" viewBox="0 0 54 110">
+        <!-- 瓶盖 -->
+        <rect x="19" y="4" width="16" height="10" rx="2"
+              fill="${color}" stroke="rgba(62,39,35,0.7)" stroke-width="1.5"/>
+        <!-- 瓶颈 -->
+        <rect x="21" y="12" width="12" height="14"
+              fill="rgba(255,255,255,0.7)"
+              stroke="rgba(62,39,35,0.5)" stroke-width="1.5"/>
+        <!-- 瓶身 -->
+        <path d="M 12 28 Q 12 24 16 24 L 38 24 Q 42 24 42 28 L 44 96 Q 44 104 36 104 L 18 104 Q 10 104 10 96 Z"
+              fill="${color}"
+              stroke="rgba(62,39,35,0.7)" stroke-width="1.8"
+              stroke-linejoin="round"/>
+        <!-- 高光 -->
+        <path d="M 17 32 L 16 90"
+              stroke="rgba(255,255,255,0.45)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <!-- 字母 -->
+        <text x="27" y="74" text-anchor="middle"
+              font-family="Fraunces, serif"
+              font-weight="800" font-style="italic"
+              font-size="26" fill="white"
+              style="paint-order: stroke; stroke: rgba(0,0,0,0.35); stroke-width: 1.5px;">
+          ${letter}
+        </text>
+      </svg>
+      <div class="bottle-label">/${CONFIG.PHONOGRAMS[letter].phoneme}/</div>
+    `;
+
+    wrap.addEventListener('click', () => onBottleClick(letter));
+    el.bottlesArea.appendChild(wrap);
+  });
+}
+
+/* ==========================================================================
+   音频：Web Audio API 短音 + SpeechSynthesis 念词
+   ========================================================================== */
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// 短促的 UI 音效
+function playTone(freq, duration = 0.12, type = 'sine', gain = 0.18) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.value = gain;
+    g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) { /* ignore */ }
+}
+
+function sfxPour()    { playTone(520, 0.1, 'sine', 0.15); }
+function sfxSuccess() { [600, 800, 1000].forEach((f, i) => setTimeout(() => playTone(f, 0.15, 'triangle', 0.2), i * 100)); }
+function sfxFail()    { [400, 250].forEach((f, i) => setTimeout(() => playTone(f, 0.2, 'sawtooth', 0.12), i * 150)); }
+function sfxCoin()    { playTone(1200, 0.08, 'square', 0.1); setTimeout(() => playTone(1600, 0.08, 'square', 0.08), 80); }
+
+// 念单词
+function speakWord(word) {
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = 'en-US';
+    u.rate = 0.75;
+    u.pitch = 1.15;
+    window.speechSynthesis.speak(u);
+  } catch (e) { /* ignore */ }
+}
+
+/* ==========================================================================
+   关卡流程
+   ========================================================================== */
+function startLevel() {
+  // 重置状态
+  state.levelWords = pickWords(CONFIG.WORDS_PER_LEVEL);
+  state.wordIndex = 0;
+  state.completed = [];
+  state.failed = [];
+  state.coins = 0;
+
+  el.startScreen.classList.add('hidden');
+  el.levelOverlay.classList.remove('visible');
+  updateLevelIndicator();
+
+  // 随机一个顾客头像
+  setRandomCustomer();
+  // 顾客进场动画
+  el.customerAvatarWrap.className = 'customer-avatar-wrap entering';
+
+  // 稍等顾客进场再开始第一个词
+  setTimeout(() => promptCurrentWord(), 700);
+}
+
+function pickWords(n) {
+  const pool = [...CONFIG.WORD_POOL];
+  const picked = [];
+  for (let i = 0; i < n && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(idx, 1)[0]);
+  }
+  return picked;
+}
+
+function setRandomCustomer() {
+  const avatars = CONFIG.CUSTOMER_AVATARS;
+  el.customerAvatar.textContent = avatars[Math.floor(Math.random() * avatars.length)];
+}
+
+function updateLevelIndicator() {
+  el.levelIndicator.textContent = `${Math.min(state.wordIndex + 1, state.levelWords.length)} / ${state.levelWords.length}`;
+}
+
+/* --- 提示当前单词（念 + 气泡 + 闪色）--- */
+function promptCurrentWord() {
+  const word = state.levelWords[state.wordIndex];
+  state.currentWord = word;
+  state.cupCapacity = word.length;
+  state.cup = [];
+  state.phase = 'prompting';
+  updateLevelIndicator();
+
+  // 渲染空杯
+  renderCup(true);
+
+  // 设置气泡和图片
+  el.speechBubble.textContent = word;
+  el.speechBubble.classList.add('visible');
+  el.hintImage.textContent = CONFIG.WORD_HINTS[word] || '✨';
+  el.hintImage.classList.add('visible');
+
+  // 念单词
+  speakWord(word);
+
+  // 延迟后闪色
+  setTimeout(() => {
+    flashCupColors(word);
+  }, CONFIG.FLASH_DELAY_BEFORE_MS);
+}
+
+function flashCupColors(word) {
+  state.phase = 'flashing';
+  // 每格按顺序显示颜色（同时闪现，但从底到顶堆叠）
+  const layers = el.cupLayers.querySelectorAll('.cup-layer');
+  layers.forEach((layer, i) => {
+    if (i < word.length) {
+      const letter = word[i];
+      const color = getComputedStyle(document.documentElement)
+        .getPropertyValue(`--color-${letter}`).trim();
+      layer.style.setProperty('--flash-duration', CONFIG.FLASH_DURATION_MS + 'ms');
+      layer.style.background = color;
+      layer.textContent = letter;
+      layer.classList.add('flashing');
+    }
+  });
+
+  // 闪色结束后清空并开始玩家操作 + 计时
+  setTimeout(() => {
+    layers.forEach(layer => {
+      layer.classList.remove('flashing');
+      layer.style.background = '';
+      layer.textContent = '';
+    });
+    startPlayerPhase();
+  }, CONFIG.FLASH_DURATION_MS);
+}
+
+function startPlayerPhase() {
+  state.phase = 'playing';
+  state.timeLeft = CONFIG.SECONDS_PER_WORD;
+  state.timeTotal = CONFIG.SECONDS_PER_WORD;
+  startTimer();
+}
+
+/* --- 倒计时 --- */
+function startTimer() {
+  clearInterval(state.timerId);
+  updateMoodRing(1);
+  state.timerId = setInterval(() => {
+    state.timeLeft -= 0.1;
+    const ratio = Math.max(0, state.timeLeft / state.timeTotal);
+    updateMoodRing(ratio);
+    if (state.timeLeft <= 0) {
+      clearInterval(state.timerId);
+      onTimeout();
+    }
+  }, 100);
+}
+
+function updateMoodRing(ratio) {
+  // 进度环（倒计时从满到空）
+  const circumference = 2 * Math.PI * 49;
+  el.moodProgress.setAttribute('stroke-dashoffset', circumference * (1 - ratio));
+
+  // 情绪阶段（注意：ratio 是剩余比例，消耗 = 1 - ratio）
+  const consumed = 1 - ratio;
+  let emoji = '😊', cls = '';
+  if (consumed > CONFIG.MOOD_IMPATIENT_UNTIL) {
+    emoji = '😠'; cls = 'angry';
+  } else if (consumed > CONFIG.MOOD_NORMAL_UNTIL) {
+    emoji = '😐'; cls = 'impatient';
+  }
+  el.moodEmoji.textContent = emoji;
+  el.moodRing.className = `mood-ring ${cls}`;
+}
+
+/* --- 点击瓶子：倒入杯子 --- */
+function onBottleClick(letter) {
+  if (state.phase !== 'playing') return;
+  if (state.cup.length >= state.cupCapacity) return;
+
+  // 倒入
+  state.cup.push(letter);
+
+  // 瓶子倾斜动画
+  const bottleEl = el.bottlesArea.querySelector(`[data-letter="${letter}"]`);
+  bottleEl.classList.add('pouring');
+  setTimeout(() => bottleEl.classList.remove('pouring'), 500);
+
+  sfxPour();
+  renderCup(false, state.cup.length - 1); // 新增的最后一层带动画
+
+  // 检查是否满杯
+  if (state.cup.length === state.cupCapacity) {
+    setTimeout(() => judgeCup(), 400);
+  }
+}
+
+/* --- 点击杯子某一层：从杯中取回到暂存 --- */
+function onCupLayerClick(layerIndex) {
+  if (state.phase !== 'playing') return;
+  // 只允许取最上面一层（LIFO）
+  const topIndex = state.cup.length - 1;
+  if (layerIndex !== topIndex) return;
+  if (state.parking.length >= CONFIG.PARKING_SLOTS) return;
+
+  const letter = state.cup.pop();
+  state.parking.push(letter);
+  sfxPour();
+  renderCup(false);
+  renderParking();
+}
+
+/* --- 点击暂存杯某格：放回杯子顶部 --- */
+function onParkingClick(index) {
+  if (state.phase !== 'playing') return;
+  if (state.parking.length === 0) return;
+  if (state.cup.length >= state.cupCapacity) return;
+  // 只允许取最后放入暂存的那个（简化）
+  const lastIdx = state.parking.length - 1;
+  if (index !== lastIdx) return;
+
+  const letter = state.parking.pop();
+  state.cup.push(letter);
+  sfxPour();
+  renderCup(false, state.cup.length - 1);
+  renderParking();
+
+  // 检查是否满杯
+  if (state.cup.length === state.cupCapacity) {
+    setTimeout(() => judgeCup(), 400);
+  }
+}
+
+/* --- 满杯判定 --- */
+function judgeCup() {
+  state.phase = 'judging';
+  clearInterval(state.timerId);
+
+  const answer = state.currentWord;
+  const guess = state.cup.join('');
+
+  if (guess === answer) {
+    handleSuccess();
+  } else {
+    handleFail();
+  }
+}
+
+function handleSuccess() {
+  sfxSuccess();
+  sfxCoin();
+  el.mainCup.classList.add('success');
+  state.completed.push(state.currentWord);
+  state.coins += CONFIG.COINS_PER_WORD;
+
+  // 水果掉落装饰
+  ['🍓', '🍋', '🫐'].forEach((f, i) => {
+    const fruit = document.createElement('div');
+    fruit.className = 'fruit-rain';
+    fruit.textContent = f;
+    fruit.style.animationDelay = (i * 0.1) + 's';
+    fruit.style.left = (40 + i * 15) + '%';
+    el.mainCup.appendChild(fruit);
+    setTimeout(() => fruit.remove(), 1000);
+  });
+
+  // 金币飘字
+  const coin = document.createElement('div');
+  coin.className = 'coin-float';
+  coin.textContent = `+${CONFIG.COINS_PER_WORD}🪙`;
+  coin.style.left = '50%';
+  coin.style.top = '40%';
+  el.mainCup.appendChild(coin);
+  setTimeout(() => coin.remove(), 1000);
+
+  // 成功飘字
+  showToast('果汁完成！', 'var(--color-i)');
+
+  // 顾客开心离开
+  setTimeout(() => {
+    el.customerAvatarWrap.classList.remove('entering');
+    el.customerAvatarWrap.classList.add('leaving-happy');
+    el.speechBubble.classList.remove('visible');
+    el.hintImage.classList.remove('visible');
+    el.mainCup.classList.remove('success');
+  }, 600);
+
+  // 进入下一词
+  setTimeout(() => advanceToNext(), 1400);
+}
+
+function handleFail() {
+  sfxFail();
+  state.failed.push(state.currentWord);
+
+  // 把所有层变毒药
+  const layers = el.cupLayers.querySelectorAll('.cup-layer');
+  layers.forEach(l => l.classList.add('poison'));
+
+  // 绿烟
+  ['💨', '☠️', '🦇'].forEach((s, i) => {
+    const smoke = document.createElement('div');
+    smoke.className = 'poison-smoke';
+    smoke.textContent = s;
+    smoke.style.animationDelay = (i * 0.15) + 's';
+    smoke.style.left = (40 + i * 10) + '%';
+    el.mainCup.appendChild(smoke);
+    setTimeout(() => smoke.remove(), 1300);
+  });
+
+  showToast('变毒药了！', 'var(--poison-green)');
+
+  // 清空杯子 + 重念 + 重新闪色 + 重新计时
+  setTimeout(() => {
+    state.cup = [];
+    state.parking = []; // 毒药连暂存也清空（D2 的"全清空"）
+    renderCup(true);
+    renderParking();
+
+    // 顾客重念 + 闪色提示（scaffolded failure）
+    speakWord(state.currentWord);
+    setTimeout(() => {
+      flashCupColors(state.currentWord);
+    }, CONFIG.FLASH_DELAY_BEFORE_MS);
+  }, 1200);
+}
+
+function onTimeout() {
+  if (state.phase !== 'playing') return;
+  state.phase = 'transitioning';
+  state.failed.push(state.currentWord);
+
+  showToast('顾客走啦！', 'var(--color-s)');
+  el.customerAvatarWrap.classList.remove('entering');
+  el.customerAvatarWrap.classList.add('leaving-angry');
+  el.speechBubble.classList.remove('visible');
+  el.hintImage.classList.remove('visible');
+
+  setTimeout(() => advanceToNext(), 1200);
+}
+
+function advanceToNext() {
+  state.wordIndex++;
+  state.cup = [];
+  state.parking = [];
+  renderCup(true);
+  renderParking();
+
+  if (state.wordIndex >= state.levelWords.length) {
+    endLevel();
+    return;
+  }
+
+  // 新顾客进场
+  setRandomCustomer();
+  el.customerAvatarWrap.className = 'customer-avatar-wrap entering';
+  setTimeout(() => promptCurrentWord(), 700);
+}
+
+function endLevel() {
+  state.phase = 'levelEnd';
+
+  el.statCompleted.textContent = `${state.completed.length}/${state.levelWords.length}`;
+  el.statCoins.textContent = state.coins;
+
+  // 单词列表
+  el.wordList.innerHTML = '';
+  state.levelWords.forEach(w => {
+    const chip = document.createElement('div');
+    chip.className = 'word-chip';
+    if (state.completed.includes(w)) chip.classList.add('correct');
+    else if (state.failed.includes(w)) chip.classList.add('failed');
+    chip.textContent = w;
+    el.wordList.appendChild(chip);
+  });
+
+  // 根据表现换文案
+  if (state.completed.length === state.levelWords.length) {
+    el.overlayTitle.textContent = '打烊啦！🌟';
+    el.overlaySubtitle.textContent = '今天的果汁都完美送到顾客手里';
+  } else if (state.completed.length > 0) {
+    el.overlayTitle.textContent = '打烊啦！';
+    el.overlaySubtitle.textContent = '还不错，再来一轮试试？';
+  } else {
+    el.overlayTitle.textContent = '今天好辛苦...';
+    el.overlaySubtitle.textContent = '再试一次，你可以的！';
+  }
+
+  el.levelOverlay.classList.add('visible');
+}
+
+/* ==========================================================================
+   渲染
+   ========================================================================== */
+function renderCup(reset = false, animateIndex = -1) {
+  // 重建 layers（数量 = cupCapacity）
+  if (reset || el.cupLayers.children.length !== state.cupCapacity) {
+    el.cupLayers.innerHTML = '';
+    for (let i = 0; i < state.cupCapacity; i++) {
+      const layer = document.createElement('div');
+      layer.className = 'cup-layer';
+      layer.dataset.index = i;
+      layer.addEventListener('click', () => onCupLayerClick(i));
+      el.cupLayers.appendChild(layer);
+    }
+    // 让 layers 变成可点击（覆盖 pointer-events）
+    el.cupLayers.style.pointerEvents = 'auto';
+  }
+
+  // 填色
+  const layers = el.cupLayers.querySelectorAll('.cup-layer');
+  layers.forEach((layer, i) => {
+    layer.classList.remove('poison', 'pouring');
+    const letter = state.cup[i];
+    if (letter) {
+      const color = getComputedStyle(document.documentElement)
+        .getPropertyValue(`--color-${letter}`).trim();
+      layer.style.background = color;
+      layer.textContent = letter;
+      if (i === animateIndex) {
+        // 触发动画（先移除再添加）
+        layer.classList.remove('pouring');
+        void layer.offsetWidth;
+        layer.classList.add('pouring');
+      }
+    } else {
+      layer.style.background = '';
+      layer.textContent = '';
+    }
+  });
+}
+
+function renderParking() {
+  const slots = el.parkingSlots.querySelectorAll('.parking-slot');
+  slots.forEach((slot, i) => {
+    const letter = state.parking[i];
+    if (letter) {
+      const color = getComputedStyle(document.documentElement)
+        .getPropertyValue(`--color-${letter}`).trim();
+      slot.style.background = color;
+      slot.textContent = letter;
+      slot.classList.add('filled');
+      slot.onclick = () => onParkingClick(i);
+    } else {
+      slot.style.background = '';
+      slot.textContent = '';
+      slot.classList.remove('filled');
+      slot.onclick = null;
+    }
+  });
+}
+
+function showToast(text, color) {
+  el.flashToast.textContent = text;
+  el.flashToast.style.color = color;
+  el.flashToast.classList.remove('show');
+  void el.flashToast.offsetWidth;
+  el.flashToast.classList.add('show');
+}
+
+/* ==========================================================================
+   启动
+   ========================================================================== */
+function init() {
+  buildBottles();
+  renderParking();
+
+  el.btnStart.addEventListener('click', () => {
+    // 触发音频上下文（用户手势内）
+    getAudioCtx();
+    // 预热 SpeechSynthesis（第一次调用可能延迟）
+    try { window.speechSynthesis.getVoices(); } catch(e) {}
+    startLevel();
+  });
+
+  el.btnReplay.addEventListener('click', () => {
+    el.levelOverlay.classList.remove('visible');
+    el.customerAvatarWrap.className = 'customer-avatar-wrap';
+    startLevel();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>

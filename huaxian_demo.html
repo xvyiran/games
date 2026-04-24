@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>画线求和 · Playtest Demo v0.1</title>
+
+<!--
+================================================================
+名称: 画线求和 Playtest Demo v0.1
+用途: 内部 playtest 验证核心机制 (心算负担、长度诱惑、倍数陷阱、必经格绕远)
+参考: 对话中已定规则集 v0.1
+关卡验证: 由 Python 求解器预先计算最短/最长/总解数
+类型: 场景模版
+日期: 2026-04-23
+================================================================
+可调参数说明 (见下方 CONFIG 区):
+  LEVELS        - 5 关关卡数据及其求解器统计
+  CELL_SIZE_PX  - 格子尺寸 (会按屏幕自适应)
+  COLORS        - 主要色彩
+  STAR_RULE     - 三星阈值计算规则 (2⭐ = shortest+2, 3⭐ = round(longest*0.85))
+-->
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; background: #f5f3ef; color: #1a1a1a; overflow: hidden; }
+body { display: flex; flex-direction: column; align-items: center; padding: 12px; touch-action: none; }
+
+/* 顶部信息条 */
+.topbar { width: 100%; max-width: 500px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.level-tag { background: #1a1a1a; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+.level-desc { font-size: 12px; color: #666; flex: 1; text-align: center; padding: 0 8px; }
+.level-nav { display: flex; gap: 4px; }
+.level-nav button { border: 1px solid #ccc; background: #fff; padding: 4px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.level-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* HUD: 目标和 + 已走格数 */
+.hud { width: 100%; max-width: 500px; display: flex; justify-content: space-around; background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.hud-item { text-align: center; }
+.hud-label { font-size: 11px; color: #999; margin-bottom: 2px; letter-spacing: 1px; }
+.hud-value { font-size: 28px; font-weight: 700; color: #1a1a1a; font-variant-numeric: tabular-nums; }
+.hud-value.target { color: #c43a3a; }
+
+/* 网格容器 */
+.grid-wrap { position: relative; margin-bottom: 20px; }
+.grid { display: grid; gap: 6px; background: transparent; }
+.cell { 
+    aspect-ratio: 1; 
+    background: #fff; 
+    border-radius: 10px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 24px; 
+    font-weight: 700;
+    position: relative;
+    transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.cell.neg { color: #c43a3a; }
+.cell.pos { color: #1a1a1a; }
+.cell.mult { background: linear-gradient(135deg, #9b7cf4 0%, #7a55e8 100%); color: #fff; }
+.cell.mult::after { content: "×2"; position: absolute; top: 3px; right: 4px; font-size: 10px; font-weight: 600; opacity: 0.9; }
+.cell.required { background: linear-gradient(135deg, #f4c75e 0%, #e8a032 100%); color: #fff; }
+.cell.required::after { content: "★"; position: absolute; top: 2px; right: 4px; font-size: 11px; }
+.cell.visited { transform: scale(0.92); box-shadow: 0 0 0 3px #2d6cdf, 0 2px 6px rgba(45,108,223,0.3); }
+.cell.visited.mult { box-shadow: 0 0 0 3px #2d6cdf, 0 2px 6px rgba(155,124,244,0.5); }
+.cell.order-badge::before { 
+    content: attr(data-order); 
+    position: absolute; 
+    bottom: 2px; 
+    left: 3px; 
+    font-size: 10px; 
+    font-weight: 600;
+    color: #2d6cdf; 
+    background: rgba(255,255,255,0.95);
+    padding: 1px 4px; 
+    border-radius: 6px;
+    min-width: 14px;
+    text-align: center;
+}
+.cell.visited.mult.order-badge::before,
+.cell.visited.required.order-badge::before { color: #1a1a1a; }
+
+/* 路径 SVG 叠加层 */
+.path-svg { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+/* 操作按钮 */
+.actions { display: flex; gap: 12px; margin-bottom: 16px; }
+.btn { padding: 12px 28px; border-radius: 24px; border: none; font-size: 18px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.btn-submit { background: #2d6cdf; color: #fff; }
+.btn-submit:disabled { background: #b8c5db; cursor: not-allowed; }
+.btn-clear { background: #fff; color: #666; border: 1px solid #ddd; }
+
+/* 结果面板 */
+.result-modal { 
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); 
+    display: none; align-items: center; justify-content: center; 
+    z-index: 100; padding: 20px;
+}
+.result-modal.show { display: flex; }
+.result-card { background: #fff; border-radius: 20px; padding: 28px 24px; width: 100%; max-width: 340px; text-align: center; }
+.result-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.result-title.fail { color: #c43a3a; }
+.result-title.success { color: #2d8f45; }
+.result-stars { font-size: 40px; margin: 16px 0; letter-spacing: 4px; }
+.result-stars .star-on { color: #f4b233; }
+.result-stars .star-off { color: #e0ddd4; }
+.result-stats { font-size: 13px; color: #666; line-height: 1.8; margin-bottom: 20px; text-align: left; background: #faf8f3; padding: 12px 14px; border-radius: 10px; }
+.result-stats .hl { color: #2d6cdf; font-weight: 600; }
+.result-actions { display: flex; gap: 10px; }
+.result-actions button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; }
+.result-retry { background: #f0ede5; color: #1a1a1a; }
+.result-next { background: #2d6cdf; color: #fff; }
+
+/* 提示信息 */
+.hint { font-size: 12px; color: #888; text-align: center; margin-top: 4px; max-width: 400px; line-height: 1.5; }
+.hint strong { color: #2d6cdf; }
+
+/* 震动动画 (提交错误时) */
+@keyframes shake { 
+    0%,100% { transform: translateX(0); } 
+    25% { transform: translateX(-6px); } 
+    75% { transform: translateX(6px); } 
+}
+.grid-wrap.shake { animation: shake 0.3s ease; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <span class="level-tag" id="levelTag">第 1 关</span>
+    <span class="level-desc" id="levelDesc">教学关 · 感受基本玩法</span>
+    <div class="level-nav">
+        <button id="prevBtn">←</button>
+        <button id="nextBtn">→</button>
+    </div>
+</div>
+
+<div class="hud">
+    <div class="hud-item">
+        <div class="hud-label">目标</div>
+        <div class="hud-value target" id="targetVal">10</div>
+    </div>
+    <div class="hud-item">
+        <div class="hud-label">已走格数</div>
+        <div class="hud-value" id="lengthVal">0</div>
+    </div>
+</div>
+
+<div class="grid-wrap" id="gridWrap">
+    <div class="grid" id="grid"></div>
+    <svg class="path-svg" id="pathSvg"></svg>
+</div>
+
+<div class="actions">
+    <button class="btn btn-clear" id="clearBtn">✕ 清空</button>
+    <button class="btn btn-submit" id="submitBtn" disabled>✓ 提交</button>
+</div>
+
+<div class="hint" id="hint">
+    手指按住数字滑动画线 · 反向滑回已走格可撤销 · <strong>不显示累计和，需要自己心算</strong>
+</div>
+
+<!-- 结果面板 -->
+<div class="result-modal" id="resultModal">
+    <div class="result-card">
+        <div class="result-title" id="resultTitle">完成!</div>
+        <div class="result-stars" id="resultStars"></div>
+        <div class="result-stats" id="resultStats"></div>
+        <div class="result-actions">
+            <button class="result-retry" id="retryBtn">再来一次</button>
+            <button class="result-next" id="nextLevelBtn">下一关</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG: 所有可调参数集中在此
+// ============================================================
+
+const LEVELS = [
+    // 关 1: 教学关 (4x4 全正 T=12)
+    {
+        name: "第 1 关",
+        desc: "教学关 · 感受基本玩法",
+        size: [4, 4],
+        target: 12,
+        cells: [
+            [ {v:1}, {v:3}, {v:2}, {v:1} ],
+            [ {v:2}, {v:1}, {v:4}, {v:3} ],
+            [ {v:3}, {v:2}, {v:1}, {v:2} ],
+            [ {v:1}, {v:4}, {v:3}, {v:1} ],
+        ],
+        solver: { shortest: 4, longest: 7, count: 130 }
+    },
+    // 关 2: 长度诱惑关 (4x4 全正 T=10, 最短 3 格 vs 最长 6 格)
+    {
+        name: "第 2 关",
+        desc: "长度诱惑 · 短路径够达标，但长路径分更高",
+        size: [4, 4],
+        target: 10,
+        cells: [
+            [ {v:2}, {v:5}, {v:1}, {v:2} ],
+            [ {v:1}, {v:2}, {v:3}, {v:1} ],
+            [ {v:4}, {v:1}, {v:2}, {v:5} ],
+            [ {v:1}, {v:3}, {v:1}, {v:2} ],
+        ],
+        solver: { shortest: 3, longest: 6, count: 68 }
+    },
+    // 关 3: 必经格关 (5x5 全正 + 必经格右下角 T=15)
+    {
+        name: "第 3 关",
+        desc: "必经格 · 金星格必须经过",
+        size: [5, 5],
+        target: 15,
+        cells: [
+            [ {v:3}, {v:1}, {v:2}, {v:1}, {v:4} ],
+            [ {v:1}, {v:2}, {v:3}, {v:2}, {v:1} ],
+            [ {v:2}, {v:1}, {v:4}, {v:1}, {v:2} ],
+            [ {v:1}, {v:3}, {v:1}, {v:2}, {v:1} ],
+            [ {v:4}, {v:1}, {v:2}, {v:1}, {v:3, required:true} ],
+        ],
+        solver: { shortest: 7, longest: 9, count: 306 }
+    },
+    // 关 4: 负数关 (5x5 -5~9 T=10)
+    {
+        name: "第 4 关",
+        desc: "负数登场 · 多走几步也能凑到目标",
+        size: [5, 5],
+        target: 10,
+        cells: [
+            [ {v:3}, {v:2}, {v:-1}, {v:4}, {v:1} ],
+            [ {v:-2}, {v:5}, {v:3}, {v:-3}, {v:2} ],
+            [ {v:1}, {v:-1}, {v:4}, {v:2}, {v:-2} ],
+            [ {v:3}, {v:2}, {v:-3}, {v:1}, {v:5} ],
+            [ {v:-1}, {v:4}, {v:2}, {v:-2}, {v:3} ],
+        ],
+        solver: { shortest: 3, longest: 19, count: 13903 }
+    },
+    // 关 5: A 级样板 (5x5 负数+倍数+必经 T=15)
+    {
+        name: "第 5 关",
+        desc: "A 级样板 · 紫色×2 触发时当前累计和翻倍",
+        size: [5, 5],
+        target: 15,
+        cells: [
+            [ {v:3}, {v:1}, {v:-2}, {v:4}, {v:2, required:true} ],
+            [ {v:-1}, {v:2}, {v:5}, {v:-3}, {v:1} ],
+            [ {v:2}, {v:-4}, {v:1, mult:true}, {v:2}, {v:-1} ],
+            [ {v:1}, {v:3}, {v:-2}, {v:5}, {v:2} ],
+            [ {v:-2}, {v:4}, {v:1}, {v:-1}, {v:3, mult:true} ],
+        ],
+        solver: { shortest: 6, longest: 24, count: 26001 }
+    },
+];
+
+const STAR_RULE = {
+    twoStarDelta: 2,        // 2⭐ = shortest + 2
+    threeStarPct: 0.85,     // 3⭐ = round(longest * 0.85)
+};
+
+const COLORS = {
+    path: "#2d6cdf",
+    pathWidth: 6,
+};
+
+// ============================================================
+// 状态
+// ============================================================
+let currentLevelIdx = 0;
+let path = [];              // [{r,c}, ...] 当前路径
+let isDrawing = false;
+let grid = [];              // 当前关卡单元格 DOM
+let cellRects = [];         // 每格的屏幕坐标 (更新在 rebuild)
+
+// ============================================================
+// 渲染
+// ============================================================
+
+function rebuildLevel() {
+    const lvl = LEVELS[currentLevelIdx];
+    document.getElementById('levelTag').textContent = lvl.name;
+    document.getElementById('levelDesc').textContent = lvl.desc;
+    document.getElementById('targetVal').textContent = lvl.target;
+    document.getElementById('lengthVal').textContent = 0;
+    document.getElementById('prevBtn').disabled = currentLevelIdx === 0;
+    document.getElementById('nextBtn').disabled = currentLevelIdx === LEVELS.length - 1;
+
+    const [rows, cols] = lvl.size;
+    const wrapW = Math.min(window.innerWidth - 24, 400);
+    const cellSize = Math.floor((wrapW - (cols - 1) * 6) / cols);
+    const gridEl = document.getElementById('grid');
+    gridEl.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+    gridEl.style.width = (cellSize * cols + (cols - 1) * 6) + 'px';
+    gridEl.innerHTML = '';
+    grid = [];
+
+    for (let r = 0; r < rows; r++) {
+        const rowArr = [];
+        for (let c = 0; c < cols; c++) {
+            const data = lvl.cells[r][c];
+            const el = document.createElement('div');
+            el.className = 'cell';
+            if (data.mult) {
+                el.classList.add('mult');
+                el.textContent = data.v;
+            } else {
+                el.classList.add(data.v < 0 ? 'neg' : 'pos');
+                if (data.required) el.classList.add('required');
+                el.textContent = (data.v > 0 ? '+' : '') + data.v;
+            }
+            el.dataset.r = r;
+            el.dataset.c = c;
+            el.style.height = cellSize + 'px';
+            gridEl.appendChild(el);
+            rowArr.push(el);
+        }
+        grid.push(rowArr);
+    }
+
+    const svg = document.getElementById('pathSvg');
+    svg.setAttribute('width', cellSize * cols + (cols - 1) * 6);
+    svg.setAttribute('height', cellSize * rows + (rows - 1) * 6);
+
+    path = [];
+    requestAnimationFrame(updateCellRects);
+    redraw();
+}
+
+function updateCellRects() {
+    cellRects = [];
+    const wrapRect = document.getElementById('gridWrap').getBoundingClientRect();
+    for (let r = 0; r < grid.length; r++) {
+        const rowArr = [];
+        for (let c = 0; c < grid[r].length; c++) {
+            const rect = grid[r][c].getBoundingClientRect();
+            rowArr.push({
+                cx: rect.left + rect.width / 2 - wrapRect.left,
+                cy: rect.top + rect.height / 2 - wrapRect.top,
+                r, c
+            });
+        }
+        cellRects.push(rowArr);
+    }
+}
+
+function redraw() {
+    // 清所有 visited
+    for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+            grid[r][c].classList.remove('visited', 'order-badge');
+            grid[r][c].removeAttribute('data-order');
+        }
+    }
+    // 标已访问 + 顺序
+    path.forEach((p, idx) => {
+        const el = grid[p.r][p.c];
+        el.classList.add('visited', 'order-badge');
+        el.setAttribute('data-order', idx + 1);
+    });
+    // 画线
+    const svg = document.getElementById('pathSvg');
+    svg.innerHTML = '';
+    if (path.length >= 2) {
+        const pts = path.map(p => {
+            const rect = cellRects[p.r][p.c];
+            return `${rect.cx},${rect.cy}`;
+        }).join(' ');
+        const pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        pl.setAttribute('points', pts);
+        pl.setAttribute('fill', 'none');
+        pl.setAttribute('stroke', COLORS.path);
+        pl.setAttribute('stroke-width', COLORS.pathWidth);
+        pl.setAttribute('stroke-linecap', 'round');
+        pl.setAttribute('stroke-linejoin', 'round');
+        pl.setAttribute('opacity', '0.7');
+        svg.appendChild(pl);
+    }
+    document.getElementById('lengthVal').textContent = path.length;
+    document.getElementById('submitBtn').disabled = path.length === 0;
+}
+
+// ============================================================
+// 交互: 画线
+// ============================================================
+
+function isAdjacent(a, b) {
+    return (Math.abs(a.r - b.r) + Math.abs(a.c - b.c)) === 1;
+}
+
+function findCellAtPoint(clientX, clientY) {
+    const wrapRect = document.getElementById('gridWrap').getBoundingClientRect();
+    const x = clientX - wrapRect.left;
+    const y = clientY - wrapRect.top;
+    for (let r = 0; r < cellRects.length; r++) {
+        for (let c = 0; c < cellRects[r].length; c++) {
+            const cr = cellRects[r][c];
+            // 命中中心附近 (避免边缘误触)
+            if (Math.abs(cr.cx - x) < 22 && Math.abs(cr.cy - y) < 22) {
+                return {r, c};
+            }
+        }
+    }
+    return null;
+}
+
+function tryMoveToCell(pt) {
+    if (!pt) return;
+    // 回滑: 进入已访问格则截断到那格
+    const idx = path.findIndex(p => p.r === pt.r && p.c === pt.c);
+    if (idx >= 0) {
+        if (idx < path.length - 1) {
+            path = path.slice(0, idx + 1);
+            redraw();
+        }
+        return;
+    }
+    // 新格: 必须与末端相邻
+    if (path.length === 0 || isAdjacent(path[path.length - 1], pt)) {
+        path.push(pt);
+        redraw();
+    }
+}
+
+function onPointerDown(e) {
+    const pt = findCellAtPoint(e.clientX, e.clientY);
+    if (!pt) return;
+    isDrawing = true;
+    if (path.length === 0) {
+        // 从头开始
+        path.push(pt);
+        redraw();
+    } else {
+        // 续画: 只有按在路径末端才继续;否则清空新起
+        const last = path[path.length - 1];
+        if (last.r === pt.r && last.c === pt.c) {
+            // 按在末端, 继续
+        } else {
+            // 重新开始
+            path = [pt];
+            redraw();
+        }
+    }
+    e.preventDefault();
+}
+
+function onPointerMove(e) {
+    if (!isDrawing) return;
+    const pt = findCellAtPoint(e.clientX, e.clientY);
+    tryMoveToCell(pt);
+    e.preventDefault();
+}
+
+function onPointerUp(e) {
+    isDrawing = false;
+}
+
+// ============================================================
+// 提交判定
+// ============================================================
+
+function evaluatePath() {
+    const lvl = LEVELS[currentLevelIdx];
+    let sum = 0;
+    let requiredVisited = true;
+    const requiredCells = [];
+    for (let r = 0; r < lvl.cells.length; r++) {
+        for (let c = 0; c < lvl.cells[r].length; c++) {
+            if (lvl.cells[r][c].required) requiredCells.push({r, c});
+        }
+    }
+
+    for (const p of path) {
+        const cell = lvl.cells[p.r][p.c];
+        if (cell.mult) sum = sum * 2;
+        else sum = sum + cell.v;
+    }
+
+    // 必经格检查
+    for (const rc of requiredCells) {
+        if (!path.some(p => p.r === rc.r && p.c === rc.c)) {
+            requiredVisited = false;
+            break;
+        }
+    }
+
+    return { sum, ok: sum === lvl.target && requiredVisited, requiredVisited, target: lvl.target };
+}
+
+function starsEarned(pathLen, solver) {
+    if (pathLen < solver.shortest) return 0;
+    const two = solver.shortest + STAR_RULE.twoStarDelta;
+    const three = Math.round(solver.longest * STAR_RULE.threeStarPct);
+    let s = 1;
+    if (pathLen >= two) s = 2;
+    if (pathLen >= three) s = 3;
+    return s;
+}
+
+function submitPath() {
+    const lvl = LEVELS[currentLevelIdx];
+    const result = evaluatePath();
+
+    if (!result.ok) {
+        // 错误: 震动 + 提示 + 路径保留
+        document.getElementById('gridWrap').classList.add('shake');
+        setTimeout(() => document.getElementById('gridWrap').classList.remove('shake'), 300);
+        const modal = document.getElementById('resultModal');
+        document.getElementById('resultTitle').textContent = 
+            !result.requiredVisited ? '还没经过金星格' : 
+            (result.sum > result.target ? `和=${result.sum}, 超出了目标` : `和=${result.sum}, 还不够`);
+        document.getElementById('resultTitle').className = 'result-title fail';
+        document.getElementById('resultStars').innerHTML = '';
+        document.getElementById('resultStats').innerHTML = 
+            `目标和 <span class="hl">${result.target}</span>, 你算出来的是 <span class="hl">${result.sum}</span><br>` +
+            `路径保留了, 关掉面板可以继续调整`;
+        document.getElementById('nextLevelBtn').textContent = '继续调整';
+        document.getElementById('nextLevelBtn').onclick = () => modal.classList.remove('show');
+        modal.classList.add('show');
+        return;
+    }
+
+    // 成功
+    const stars = starsEarned(path.length, lvl.solver);
+    const modal = document.getElementById('resultModal');
+    document.getElementById('resultTitle').textContent = stars === 3 ? '完美!' : stars === 2 ? '很棒!' : '过关!';
+    document.getElementById('resultTitle').className = 'result-title success';
+    document.getElementById('resultStars').innerHTML = 
+        ['★','★','★'].map((s, i) => 
+            `<span class="${i < stars ? 'star-on' : 'star-off'}">★</span>`
+        ).join('');
+    const twoStar = lvl.solver.shortest + STAR_RULE.twoStarDelta;
+    const threeStar = Math.round(lvl.solver.longest * STAR_RULE.threeStarPct);
+    document.getElementById('resultStats').innerHTML = 
+        `你的路径: <span class="hl">${path.length} 格</span> (求和 = ${result.sum})<br>` +
+        `本关最短: ${lvl.solver.shortest} 格 &nbsp;|&nbsp; 最长: ${lvl.solver.longest} 格<br>` +
+        `2⭐阈值: ${twoStar} 格 &nbsp;|&nbsp; 3⭐阈值: ${threeStar} 格<br>` +
+        `合法解总数: ${lvl.solver.count}`;
+
+    document.getElementById('nextLevelBtn').textContent = currentLevelIdx < LEVELS.length - 1 ? '下一关' : '回到第 1 关';
+    document.getElementById('nextLevelBtn').onclick = () => {
+        modal.classList.remove('show');
+        currentLevelIdx = (currentLevelIdx + 1) % LEVELS.length;
+        rebuildLevel();
+    };
+    modal.classList.add('show');
+}
+
+// ============================================================
+// 事件绑定
+// ============================================================
+
+document.getElementById('prevBtn').onclick = () => {
+    if (currentLevelIdx > 0) { currentLevelIdx--; rebuildLevel(); }
+};
+document.getElementById('nextBtn').onclick = () => {
+    if (currentLevelIdx < LEVELS.length - 1) { currentLevelIdx++; rebuildLevel(); }
+};
+document.getElementById('clearBtn').onclick = () => {
+    path = [];
+    redraw();
+};
+document.getElementById('submitBtn').onclick = submitPath;
+document.getElementById('retryBtn').onclick = () => {
+    document.getElementById('resultModal').classList.remove('show');
+    path = [];
+    redraw();
+};
+
+const wrap = document.getElementById('gridWrap');
+wrap.addEventListener('pointerdown', onPointerDown);
+wrap.addEventListener('pointermove', onPointerMove);
+wrap.addEventListener('pointerup', onPointerUp);
+wrap.addEventListener('pointercancel', onPointerUp);
+wrap.addEventListener('pointerleave', onPointerUp);
+
+window.addEventListener('resize', () => {
+    rebuildLevel();
+});
+
+// 初始化
+rebuildLevel();
+</script>
+</body>
+</html>

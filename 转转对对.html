@@ -1,0 +1,826 @@
+<!--
+名称：转转对对
+用途：同心圆环旋转答题游戏 — 知识答题 + 色相对齐双判定
+类型：独立游戏组件
+日期：2026-05-15
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>转转对对</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #ece9f8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'PingFang SC','Hiragino Sans GB',sans-serif;
+  overflow: hidden;
+  transition: background 1s ease;
+}
+
+/* ── 开始界面 ── */
+#startScreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  background: linear-gradient(155deg, hsl(270,55%,90%) 0%, hsl(210,55%,88%) 100%);
+  z-index: 30;
+  transition: opacity 0.5s;
+}
+#startScreen.hide { opacity:0; pointer-events:none; }
+
+.start-deco {
+  font-size: 3.6rem;
+  line-height: 1;
+  user-select: none;
+}
+.start-title {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  background: linear-gradient(135deg, #7c4dff, #26c6da);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.start-rule {
+  font-size: 0.92rem;
+  color: #7060a0;
+  line-height: 1.8;
+  text-align: center;
+  letter-spacing: 0.04em;
+  max-width: 280px;
+}
+.start-rule strong {
+  color: #5540c0;
+  -webkit-text-fill-color: #5540c0;
+}
+#startBtn {
+  margin-top: 0.4rem;
+  padding: 0.75rem 2.8rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.12em;
+  color: white;
+  background: linear-gradient(135deg, #7c4dff, #26c6da);
+  border: none;
+  border-radius: 3rem;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(124,77,255,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+#startBtn:hover { transform: scale(1.05); box-shadow: 0 8px 28px rgba(124,77,255,0.45); }
+
+/* ── 游戏画面 ── */
+#gameCanvas {
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#gameCanvas:active { cursor: grabbing; }
+
+/* 题号 */
+#qLabel {
+  position: fixed;
+  top: 1.1rem;
+  right: 1.3rem;
+  font-size: 0.8rem;
+  color: rgba(100,80,150,0.6);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  z-index: 5;
+}
+
+/* 提示 */
+#hint {
+  position: fixed;
+  bottom: 1.8rem;
+  font-size: 0.78rem;
+  color: rgba(100,80,140,0.52);
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── 结算遮罩 ── */
+#winOverlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s;
+  z-index: 10;
+}
+#winOverlay.show { opacity:1; pointer-events:all; }
+
+#winText {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0,0,0,0.22);
+  letter-spacing: 0.1em;
+}
+#winAnswer {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.92);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.2rem;
+}
+#winProgress {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 0.5rem;
+}
+.prog-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  transition: background 0.3s;
+}
+.prog-dot.done    { background: rgba(255,255,255,0.85); }
+.prog-dot.current { background: white; box-shadow: 0 0 7px rgba(255,255,255,0.9); }
+
+#nextBtn {
+  background: rgba(255,255,255,0.22);
+  border: 2px solid rgba(255,255,255,0.72);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.55rem 1.9rem;
+  border-radius: 2rem;
+  cursor: pointer;
+  font-family: inherit;
+  backdrop-filter: blur(10px);
+  letter-spacing: 0.06em;
+  transition: background 0.2s, transform 0.12s;
+}
+#nextBtn:hover { background: rgba(255,255,255,0.4); transform: scale(1.04); }
+
+/* ── 通关页 ── */
+#endScreen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  background: linear-gradient(135deg, hsl(260,58%,88%), hsl(200,55%,88%));
+  z-index: 20;
+}
+#endScreen.show { display: flex; }
+#endEmoji  { font-size: 3.6rem; }
+#endTitle  { font-size: 2rem; font-weight: 800; color: #4a3080; letter-spacing: 0.1em; }
+#endSub    { font-size: 0.9rem; color: #8060b0; letter-spacing: 0.04em; text-align:center; }
+#restartBtn {
+  margin-top: 0.5rem;
+  background: #6040b0;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.65rem 2.4rem;
+  border-radius: 2rem;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 18px rgba(96,64,176,0.35);
+  transition: background 0.2s, transform 0.12s;
+}
+#restartBtn:hover { background: #7050c0; transform: scale(1.04); }
+</style>
+</head>
+<body>
+
+<!-- 开始界面 -->
+<div id="startScreen">
+  <div class="start-deco">🎯</div>
+  <div class="start-title">转转对对</div>
+  <div class="start-rule">
+    拨动圆环旋转，让<strong>正确答案</strong>同时<br>
+    对齐右侧横轴——颜色和文字会<br>
+    一起告诉你答没答对！
+  </div>
+  <button id="startBtn">开始游戏 →</button>
+</div>
+
+<!-- 题号 -->
+<div id="qLabel" style="display:none">1 / 10　⭐</div>
+
+<!-- 游戏画布 -->
+<canvas id="gameCanvas" style="display:none"></canvas>
+
+<!-- 提示 -->
+<div id="hint" style="display:none">拨动圆环，让正确答案对齐右侧横轴</div>
+
+<!-- 结算遮罩 -->
+<div id="winOverlay">
+  <div id="winText">✨ 答对了！</div>
+  <div id="winAnswer"></div>
+  <div id="winProgress"></div>
+  <button id="nextBtn">下一题 →</button>
+</div>
+
+<!-- 通关页 -->
+<div id="endScreen">
+  <div id="endEmoji">🎉</div>
+  <div id="endTitle">全部完成！</div>
+  <div id="endSub">十道题全对<br>知识与色感双满分</div>
+  <button id="restartBtn">再玩一次</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const CFG = {
+  SIZE: 380,
+  R_OUTER: 162,
+  R_INNER: 109,
+  R_CENTER: 54,
+  RING_W: 42,
+  FRICTION: 0.87,
+  MIN_VEL: 0.0004,
+  SNAP_THRESH: 0.20,  // 判定对齐阈值(rad)
+  HUE_SPAN: 140,
+};
+
+// ═══════════════════════════════════════════════
+// 题库
+// ═══════════════════════════════════════════════
+const QUESTIONS = [
+  { center:'静夜思', hue:250, bg:250,
+    outer:{ opts:['唐','宋','汉','明','清'],         ok:'唐'   },
+    inner:{ opts:['李白','杜甫','苏轼','王维','白居易'], ok:'李白' } },
+  { center:'春晓',   hue:135, bg:135,
+    outer:{ opts:['唐','宋','汉','明','清'],         ok:'唐'    },
+    inner:{ opts:['孟浩然','李白','白居易','杜甫','王昌龄'], ok:'孟浩然' } },
+  { center:'悯农',   hue:32,  bg:32,
+    outer:{ opts:['唐','宋','元','明','清'],         ok:'唐'   },
+    inner:{ opts:['李绅','杜甫','白居易','韩愈','刘禹锡'], ok:'李绅' } },
+  { center:'水调歌头', hue:200, bg:200,
+    outer:{ opts:['宋','唐','元','明','清'],         ok:'宋'   },
+    inner:{ opts:['苏轼','李清照','辛弃疾','陆游','柳永'], ok:'苏轼' } },
+  { center:'登鹳雀楼', hue:18, bg:18,
+    outer:{ opts:['唐','宋','汉','元','清'],         ok:'唐'   },
+    inner:{ opts:['王之涣','王昌龄','王维','高适','岑参'], ok:'王之涣' } },
+  { center:'卧薪尝胆', hue:340, bg:340,
+    outer:{ opts:['越王','楚王','秦王','吴王','魏王'], ok:'越王' },
+    inner:{ opts:['勾践','夫差','范蠡','伍子胥','西施'], ok:'勾践' } },
+  { center:'望庐山瀑布', hue:175, bg:175,
+    outer:{ opts:['唐','宋','明','清','汉'],         ok:'唐'   },
+    inner:{ opts:['李白','李贺','李商隐','李绅','杜牧'], ok:'李白' } },
+  { center:'声声慢', hue:278, bg:278,
+    outer:{ opts:['宋','唐','元','明','金'],         ok:'宋'   },
+    inner:{ opts:['李清照','柳永','晏殊','秦观','周邦彦'], ok:'李清照' } },
+  { center:'破釜沉舟', hue:55, bg:55,
+    outer:{ opts:['秦','汉','楚','赵','魏'],         ok:'楚'   },
+    inner:{ opts:['项羽','刘邦','韩信','章邯','范增'], ok:'项羽' } },
+  { center:'浪淘沙', hue:165, bg:165,
+    outer:{ opts:['唐','宋','五代','元','清'],       ok:'唐'   },
+    inner:{ opts:['刘禹锡','白居易','温庭筠','韦庄','李煜'], ok:'刘禹锡' } },
+];
+
+const DIFFICULTY = ['⭐','⭐','⭐','⭐⭐','⭐⭐','⭐⭐','⭐⭐','⭐⭐⭐','⭐⭐⭐','⭐⭐⭐'];
+
+// ═══════════════════════════════════════════════
+// 状态
+// ═══════════════════════════════════════════════
+let currentQ = 0;
+let rings = null;
+let gameState = 'idle'; // idle | playing | winning | won
+let winT = 0;
+let burst = [];
+
+// ═══════════════════════════════════════════════
+// Canvas
+// ═══════════════════════════════════════════════
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const DPR    = Math.min(window.devicePixelRatio || 2, 3);
+const S      = CFG.SIZE;
+const CX = S/2, CY = S/2;
+
+canvas.width  = S * DPR;
+canvas.height = S * DPR;
+canvas.style.width  = S + 'px';
+canvas.style.height = S + 'px';
+ctx.scale(DPR, DPR);
+
+// ═══════════════════════════════════════════════
+// 安全 arc — 永远不会传负半径
+// ═══════════════════════════════════════════════
+function safeArc(cx, cy, r, a0, a1, ccw) {
+  const rr = Math.max(0.01, r);
+  if (ccw !== undefined) ctx.arc(cx, cy, rr, a0, a1, ccw);
+  else ctx.arc(cx, cy, rr, a0, a1);
+}
+
+// ═══════════════════════════════════════════════
+// Ring 类
+// ═══════════════════════════════════════════════
+class Ring {
+  constructor(radius, opts, okOpt, hue) {
+    this.radius = radius;
+    this.opts   = opts;
+    this.okOpt  = okOpt;
+    this.okIdx  = opts.indexOf(okOpt);
+    this.hue    = hue;
+
+    const n = opts.length;
+    const okAngle = (this.okIdx / n) * Math.PI * 2;
+    // 随机初始角，保证正确答案不在右侧
+    let offset = (Math.random() * 0.55 + 0.22) * Math.PI * 2;
+    this.angle = offset - okAngle;
+    this.vel   = 0;
+    this.ok    = false;
+  }
+
+  // 当前右轴(angle=0)对应的选项索引
+  get snapIdx() {
+    const n = this.opts.length;
+    const step = (Math.PI*2) / n;
+    const a = ((-this.angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    return Math.round(a / step) % n;
+  }
+
+  get snapOpt() { return this.opts[this.snapIdx]; }
+
+  // 右轴对齐误差(rad)
+  error() {
+    const n = this.opts.length;
+    const step = (Math.PI*2) / n;
+    const a = ((-this.angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    const nearest = Math.round(a / step) * step;
+    let d = ((a - nearest) + Math.PI) % (Math.PI*2) - Math.PI;
+    return Math.abs(d);
+  }
+
+  isAligned() {
+    return this.error() < CFG.SNAP_THRESH && this.snapOpt === this.okOpt;
+  }
+
+  snapNearest() {
+    const n = this.opts.length;
+    const step = (Math.PI*2) / n;
+    const a = ((-this.angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    const nearest = Math.round(a / step) * step;
+    this.angle = -nearest;
+  }
+
+  update() {
+    if (Math.abs(this.vel) > CFG.MIN_VEL) {
+      this.angle += this.vel;
+      this.vel   *= CFG.FRICTION;
+    } else {
+      this.vel = 0;
+      this.snapNearest();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 色相函数
+// ═══════════════════════════════════════════════
+// t=0 → 右侧，色相=hueAnchor；cos曲线无接缝
+function hueAt(t, anchor, span) {
+  return anchor + (span/2) * Math.cos(t * Math.PI * 2);
+}
+
+// ═══════════════════════════════════════════════
+// 绘制：环色相
+// ═══════════════════════════════════════════════
+function drawRingHue(radius, ringW, angle, hueAnchor, alpha=1) {
+  const n   = 120;
+  const r0  = Math.max(0.01, radius - ringW/2);
+  const r1  = radius + ringW/2;
+  for (let i=0; i<n; i++) {
+    const t  = i/n;
+    const a0 = angle + t * Math.PI*2;
+    const a1 = angle + (i+1)/n * Math.PI*2;
+    const hue = hueAt(t, hueAnchor, CFG.HUE_SPAN);
+    ctx.beginPath();
+    ctx.moveTo(CX + r0*Math.cos(a0), CY + r0*Math.sin(a0));
+    safeArc(CX, CY, r1, a0, a1);
+    safeArc(CX, CY, r0, a1, a0, true);
+    ctx.closePath();
+    ctx.fillStyle = `hsla(${hue},65%,72%,${alpha})`;
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 绘制：中心圆（角度色相，固定不转）
+// ═══════════════════════════════════════════════
+function drawCenter(q, textAlpha=1) {
+  const r = CFG.R_CENTER;
+  const n = 80;
+  for (let i=0; i<n; i++) {
+    const t  = i/n;
+    const a0 = t * Math.PI*2;
+    const a1 = (i+1)/n * Math.PI*2;
+    const hue = hueAt(t, q.hue, CFG.HUE_SPAN);
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    safeArc(CX, CY, r, a0, a1);
+    ctx.closePath();
+    ctx.fillStyle = `hsl(${hue},70%,72%)`;
+    ctx.fill();
+  }
+  // 白色光晕
+  const gw = ctx.createRadialGradient(CX,CY,0, CX,CY,r);
+  gw.addColorStop(0,   'rgba(255,255,255,0.45)');
+  gw.addColorStop(0.55,'rgba(255,255,255,0.10)');
+  gw.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.beginPath(); safeArc(CX,CY,r,0,Math.PI*2);
+  ctx.fillStyle = gw; ctx.fill();
+  // 题眼文字
+  if (textAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = textAlpha;
+    ctx.font = 'bold 15px PingFang SC,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.shadowColor = `hsl(${q.hue},50%,35%)`; ctx.shadowBlur = 10;
+    ctx.fillText(q.center, CX, CY);
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 绘制：选项文字气泡
+// ═══════════════════════════════════════════════
+function drawLabels(ring) {
+  const n    = ring.opts.length;
+  const step = (Math.PI*2) / n;
+  for (let i=0; i<n; i++) {
+    const angle = ring.angle + i*step;
+    const x = CX + ring.radius * Math.cos(angle);
+    const y = CY + ring.radius * Math.sin(angle);
+
+    // 离右轴距离
+    const norm = ((angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    const dist = Math.min(norm, Math.PI*2 - norm);
+    const prox = Math.max(0, 1 - dist/(Math.PI*0.5));
+
+    const isOk       = ring.opts[i] === ring.okOpt;
+    const isAligned  = dist < CFG.SNAP_THRESH && isOk;
+
+    // 气泡
+    const bR = 16 + prox*6;
+    ctx.beginPath(); safeArc(x,y,bR,0,Math.PI*2);
+    ctx.fillStyle = (isAligned && ring.ok)
+      ? 'rgba(255,255,255,0.92)'
+      : `rgba(255,255,255,${0.15 + prox*0.35})`;
+    ctx.fill();
+
+    // 文字
+    ctx.save();
+    ctx.font = prox>0.6
+      ? 'bold 15px PingFang SC,sans-serif'
+      : '14px PingFang SC,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = (isAligned && ring.ok)
+      ? `hsl(${ring.hue},60%,32%)`
+      : `rgba(55,38,90,${0.5 + prox*0.5})`;
+    ctx.fillText(ring.opts[i], x, y);
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 绘制：环白边（单环对齐时亮起）
+// ═══════════════════════════════════════════════
+function drawRingBorder(ring) {
+  if (!ring.ok) return;
+  ctx.beginPath();
+  safeArc(CX,CY, ring.radius+CFG.RING_W/2+2.5, 0, Math.PI*2);
+  safeArc(CX,CY, ring.radius-CFG.RING_W/2-2.5, 0, Math.PI*2, true);
+  ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+  ctx.lineWidth   = 2.5;
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════
+// 绘制：右侧对齐轴
+// ═══════════════════════════════════════════════
+function drawAxis() {
+  const x0 = CX + CFG.R_CENTER + 6;
+  const x1 = CX + CFG.R_OUTER  + CFG.RING_W/2 + 18;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(140,100,210,0.22)';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([4,5]);
+  ctx.beginPath(); ctx.moveTo(x0,CY); ctx.lineTo(x1,CY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(140,100,210,0.45)';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1-10, CY-5);
+  ctx.lineTo(x1,    CY);
+  ctx.lineTo(x1-10, CY+5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════
+// Burst 粒子
+// ═══════════════════════════════════════════════
+function spawnBurst(hue) {
+  burst = [];
+  for (let i=0; i<28; i++) {
+    burst.push({
+      a: (i/28)*Math.PI*2,
+      r: CFG.R_CENTER,
+      spd: 1.8 + Math.random()*2.8,
+      life: 1,
+      hue: hue + (Math.random()-0.5)*50,
+      sz: 2.5 + Math.random()*3,
+    });
+  }
+}
+function tickBurst() {
+  burst = burst.filter(p=>p.life>0);
+  for (const p of burst) {
+    p.r    += p.spd;
+    p.life -= 0.022;
+    const x = CX + p.r*Math.cos(p.a);
+    const y = CY + p.r*Math.sin(p.a);
+    ctx.beginPath(); safeArc(x,y, Math.max(0.1, p.sz*p.life), 0, Math.PI*2);
+    ctx.fillStyle = `hsla(${p.hue},72%,74%,${p.life})`;
+    ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 结算动画（两阶段）
+// ═══════════════════════════════════════════════
+function drawWin(q) {
+  const t = winT;
+  const h = q.hue;
+
+  if (t < 1.0) {
+    // ─ Phase 1：游戏画面保留，词条弹出 ─
+    drawRingHue(CFG.R_OUTER, CFG.RING_W, rings.outer.angle, h);
+    drawRingBorder(rings.outer);
+    drawLabels(rings.outer);
+    drawRingHue(CFG.R_INNER, CFG.RING_W, rings.inner.angle, h);
+    drawRingBorder(rings.inner);
+    drawLabels(rings.inner);
+    drawCenter(q);
+    drawAxis();
+
+    // 词条弹出比例
+    const pop = t < 0.4
+      ? 0.7 + (t/0.4)*0.95
+      : 1.6 - ((t-0.4)/0.6)*0.6;   // 过冲后回弹到1.0
+
+    const alpha = Math.min(t/0.3, 1);
+
+    [CFG.R_OUTER, CFG.R_INNER].forEach((rad, idx) => {
+      const ring = idx===0 ? rings.outer : rings.inner;
+      const bx   = CX + rad;
+      ctx.beginPath(); safeArc(bx, CY, 26*pop, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.shadowColor = `hsl(${h},60%,65%)`; ctx.shadowBlur = 18*pop;
+      ctx.globalAlpha = alpha; ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = `bold ${Math.round(14*pop)}px PingFang SC,sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle = `hsl(${h},55%,32%)`;
+      ctx.shadowColor = `hsl(${h},60%,70%)`; ctx.shadowBlur = 7;
+      ctx.fillText(ring.okOpt, bx, CY);
+      ctx.restore();
+    });
+
+    // 中心脉冲光晕
+    const glowR = Math.max(1, CFG.R_CENTER * (1+0.08*Math.sin(t*10)) * 1.7 * Math.min(t/0.28,1));
+    const gg = ctx.createRadialGradient(CX,CY,0, CX,CY,glowR);
+    gg.addColorStop(0, `hsla(${h+40},100%,96%,${0.5*Math.min(t/0.28,1)})`);
+    gg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.beginPath(); safeArc(CX,CY,glowR,0,Math.PI*2);
+    ctx.fillStyle=gg; ctx.fill();
+
+  } else {
+    // ─ Phase 2：三环融合扩张 ─
+    const p2   = Math.min((t-1.0)/1.5, 1);
+    const ease = p2<0.5 ? 2*p2*p2 : 1-Math.pow(-2*p2+2,2)/2;
+
+    const maxR  = S*0.72;
+    const rOut  = Math.max(1, CFG.R_OUTER  + ease*(maxR            - CFG.R_OUTER));
+    const rIn   = Math.max(1, CFG.R_INNER  + ease*(maxR*0.65       - CFG.R_INNER));
+    const rCen  = Math.max(1, CFG.R_CENTER + ease*(maxR*0.38       - CFG.R_CENTER));
+    const span  = CFG.HUE_SPAN * (1 + ease*0.3);
+
+    // 外层大圆
+    const nSeg = 120;
+    for (let i=0; i<nSeg; i++) {
+      const t0 = i/nSeg;
+      const a0 = t0*Math.PI*2, a1=(i+1)/nSeg*Math.PI*2;
+      const hue = hueAt(t0, h, span);
+      ctx.beginPath(); ctx.moveTo(CX,CY);
+      safeArc(CX,CY,rOut,a0,a1); ctx.closePath();
+      ctx.fillStyle=`hsla(${hue},65%,72%,0.92)`; ctx.fill();
+    }
+    // 内层提亮
+    for (let i=0; i<nSeg; i++) {
+      const t0 = i/nSeg;
+      const a0 = t0*Math.PI*2, a1=(i+1)/nSeg*Math.PI*2;
+      const hue = hueAt(t0, h, CFG.HUE_SPAN*0.55);
+      ctx.beginPath(); ctx.moveTo(CX,CY);
+      safeArc(CX,CY,rIn,a0,a1); ctx.closePath();
+      ctx.fillStyle=`hsla(${hue},75%,80%,0.55)`; ctx.fill();
+    }
+    // 中心光晕
+    const pulse = 1 + 0.06*Math.sin(winT*6);
+    const gr2 = Math.max(1, rCen*pulse*1.55);
+    const gg2 = ctx.createRadialGradient(CX,CY,0, CX,CY,gr2);
+    gg2.addColorStop(0,   `hsla(${h+50},100%,97%,0.88)`);
+    gg2.addColorStop(0.38,`hsla(${h+20},90%,92%,0.4)`);
+    gg2.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.beginPath(); safeArc(CX,CY,gr2,0,Math.PI*2);
+    ctx.fillStyle=gg2; ctx.fill();
+
+    // 题眼淡出
+    const ta = Math.max(0, 1-ease*2.5);
+    if (ta>0) drawCenter(q, ta);
+
+    // Phase2 结束 → 显示下一题按钮
+    if (p2>=1 && gameState==='winning') {
+      gameState='won';
+      document.getElementById('winOverlay').classList.add('show');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 主循环
+// ═══════════════════════════════════════════════
+function update() {
+  if (gameState!=='playing') return;
+  rings.outer.update();
+  rings.inner.update();
+  rings.outer.ok = rings.outer.isAligned();
+  rings.inner.ok = rings.inner.isAligned();
+  if (rings.outer.ok && rings.inner.ok) {
+    gameState='winning'; winT=0;
+    spawnBurst(QUESTIONS[currentQ].hue);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0,0,S,S);
+  if (gameState==='idle') return;
+
+  const q = QUESTIONS[currentQ];
+
+  if (gameState==='winning' || gameState==='won') {
+    if (gameState==='winning') winT += 0.022;
+    drawWin(q);
+    tickBurst();
+    return;
+  }
+
+  // 正常游戏
+  drawRingHue(CFG.R_OUTER, CFG.RING_W, rings.outer.angle, q.hue);
+  drawRingBorder(rings.outer);
+  drawLabels(rings.outer);
+
+  drawRingHue(CFG.R_INNER, CFG.RING_W, rings.inner.angle, q.hue);
+  drawRingBorder(rings.inner);
+  drawLabels(rings.inner);
+
+  drawCenter(q);
+  drawAxis();
+  tickBurst();
+}
+
+function loop() {
+  update(); draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ═══════════════════════════════════════════════
+// 加载题目
+// ═══════════════════════════════════════════════
+function buildDots(idx) {
+  const el = document.getElementById('winProgress');
+  el.innerHTML='';
+  for (let i=0; i<QUESTIONS.length; i++) {
+    const d = document.createElement('div');
+    d.className='prog-dot'+(i<idx?' done':i===idx?' current':'');
+    el.appendChild(d);
+  }
+}
+
+function loadQ(idx) {
+  const q    = QUESTIONS[idx];
+  const last = idx===QUESTIONS.length-1;
+  document.getElementById('qLabel').textContent = `${idx+1} / ${QUESTIONS.length}　${DIFFICULTY[idx]}`;
+  document.body.style.background = `hsl(${q.bg},40%,94%)`;
+  document.getElementById('winAnswer').textContent = `${q.outer.ok}　·　${q.inner.ok}`;
+  document.getElementById('nextBtn').textContent   = last ? '查看结果 🎉' : '下一题 →';
+  buildDots(idx);
+  rings={
+    outer: new Ring(CFG.R_OUTER, q.outer.opts, q.outer.ok, q.hue),
+    inner: new Ring(CFG.R_INNER, q.inner.opts, q.inner.ok, q.hue),
+  };
+  gameState='playing'; winT=0; burst=[];
+  document.getElementById('winOverlay').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════
+// 触摸 / 鼠标
+// ═══════════════════════════════════════════════
+let drag = null;
+
+function hitRing(x,y) {
+  const dx=x-CX, dy=y-CY, d=Math.sqrt(dx*dx+dy*dy);
+  if (Math.abs(d-CFG.R_OUTER)<CFG.RING_W/2+10) return rings.outer;
+  if (Math.abs(d-CFG.R_INNER)<CFG.RING_W/2+10) return rings.inner;
+  return null;
+}
+function ptAngle(x,y){ return Math.atan2(y-CY, x-CX); }
+
+function scaleXY(e, isTouch) {
+  const r=canvas.getBoundingClientRect();
+  const sx=S/r.width, sy=S/r.height;
+  const src=isTouch ? e.touches[0] : e;
+  return [(src.clientX-r.left)*sx, (src.clientY-r.top)*sy];
+}
+
+function pDown(x,y) {
+  if (gameState!=='playing') return;
+  const ring=hitRing(x,y); if(!ring) return;
+  drag={ring, last:ptAngle(x,y)}; ring.vel=0;
+}
+function pMove(x,y) {
+  if (!drag) return;
+  const a=ptAngle(x,y);
+  let d=a-drag.last;
+  if (d>Math.PI)  d-=Math.PI*2;
+  if (d<-Math.PI) d+=Math.PI*2;
+  drag.ring.angle+=d; drag.ring.vel=d; drag.last=a;
+}
+function pUp() { drag=null; }
+
+canvas.addEventListener('mousedown', e=>{const[x,y]=scaleXY(e,false);pDown(x,y);});
+window.addEventListener('mousemove', e=>{if(!drag)return;const[x,y]=scaleXY(e,false);pMove(x,y);});
+window.addEventListener('mouseup', pUp);
+
+canvas.addEventListener('touchstart', e=>{e.preventDefault();const[x,y]=scaleXY(e,true);pDown(x,y);},{passive:false});
+canvas.addEventListener('touchmove',  e=>{e.preventDefault();const[x,y]=scaleXY(e,true);pMove(x,y);},{passive:false});
+canvas.addEventListener('touchend',   e=>{e.preventDefault();pUp();},{passive:false});
+
+// ═══════════════════════════════════════════════
+// 按钮事件
+// ═══════════════════════════════════════════════
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  document.getElementById('startScreen').classList.add('hide');
+  setTimeout(()=>{ document.getElementById('startScreen').style.display='none'; },520);
+  document.getElementById('qLabel').style.display='';
+  document.getElementById('gameCanvas').style.display='';
+  document.getElementById('hint').style.display='';
+  currentQ=0;
+  loadQ(0);
+});
+
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  const next=currentQ+1;
+  if (next>=QUESTIONS.length) {
+    document.getElementById('winOverlay').classList.remove('show');
+    document.getElementById('endScreen').classList.add('show');
+  } else {
+    currentQ=next;
+    loadQ(currentQ);
+  }
+});
+
+document.getElementById('restartBtn').addEventListener('click', ()=>{
+  document.getElementById('endScreen').classList.remove('show');
+  currentQ=0;
+  loadQ(0);
+});
+</script>
+</body>
+</html>
